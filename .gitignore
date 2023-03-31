@@ -1,0 +1,16 @@
+
+.vscode
+node_modules/
+configs_/
+
+.env
+
+*.lnk
+*.csv
+*.bat
+Thumbs.db
+
+ngrok/
+ngrok.zip
+
+blacklist/
