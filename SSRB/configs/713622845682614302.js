@@ -2,14 +2,6 @@
 module.exports = {      // KTG
     name: 'KTG',
     perfix: /(^[\/\-!~])[\S]/,
-    getCommandLineArgs: function (msg) {
-        let args = null, command = null;
-        if (this.perfix.test(msg)) {
-            args = msg.slice(1).split(/\s+/);
-            command = args.shift().toLowerCase();
-        }
-        return { command, args };
-    },
 
     memberChecker2: [
         {

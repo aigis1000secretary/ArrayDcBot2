@@ -4,7 +4,6 @@ const EMOJI_REBOOTED = (process.env.HOST_TYPE == 'FLY_IO' ? EMOJI_BIRD : EMOJI_A
 
 const fs = require('fs');
 const path = require('path');
-const { discordToken, debugChannelID, debugPlugins } = require('./configs/config.js');
 
 // discord
 const Discord = require('discord.js');
@@ -29,11 +28,9 @@ module.exports = {
             ]
         });
 
-        client.commands = new Discord.Collection();
-
+        // configs
         client.mainConfigs = new Object();
         client.guildConfigs = new Discord.Collection();
-
         // require configs
         let filepath = path.join(__dirname, `./configs/`);
         if (fs.existsSync(filepath)) {
@@ -56,20 +53,32 @@ module.exports = {
                 }
             }
         }
-
+        const getCommandLineArgs = function (msg) {
+            let args = null, command = null;
+            if (this.perfix.test(msg)) {
+                args = msg.slice(1).split(/\s+/);
+                command = args.shift().toLowerCase();
+            }
+            return { command, args };
+        }
+        // get plugin list
         let plugins = [];
         for (let [gID, gConfig] of client.guildConfigs) {
 
             // get plugins name
             for (let pluginName of Object.keys(gConfig)) {
 
-                if (['name', 'perfix', 'getCommandLineArgs'].includes(pluginName)) { continue; }
+                if (['name', 'perfix'].includes(pluginName)) { continue; }
                 if (plugins.includes(pluginName)) { continue; }
 
                 plugins.push(pluginName);
             }
+
+            client.guildConfigs.get(gID).getCommandLineArgs = getCommandLineArgs;
         }
 
+        // plugins
+        client.commands = new Discord.Collection();
         // require plugins
         filepath = path.join(__dirname, `./plugins/`);
         if (fs.existsSync(filepath)) {
@@ -81,8 +90,9 @@ module.exports = {
                 const { name } = path.parse(file);
 
                 if (!plugins.includes(name)) { continue; }
-                // // in debug mode, only run plugin in list
-                // if (process.env.HOST_TYPE == 'debug' && !debugPlugins.includes(name)) { continue; }
+                // in debug mode, only run plugin in list
+                if (process.env.HOST_TYPE == 'debug' &&
+                    !client.mainConfigs.debugPlugins.includes(name)) { continue; }
 
                 const plugin = require(`${filepath}${file}`);
                 client.commands.set(name, plugin);
@@ -90,30 +100,110 @@ module.exports = {
             }
         }
 
+        // config method
         client.getPluginConfig = function (gID, pluginNname) {
             let guildConfig = this.guildConfigs.get(gID);
             if (!guildConfig) { return null; }
             return guildConfig[pluginNname] || null;
         }
 
+        // emit
         // text command
         client.on('messageCreate', async (message) => {
-            // Emitted 
+            // Emitted
             for (let [key, value] of client.commands) {
                 if (!value.execute || typeof (value.execute) != "function") { continue; }
 
-                let { client, guildId } = message;
-
                 // get pluginConfig
+                let { client, guildId } = message;
                 const pluginConfig = client.getPluginConfig(guildId, key);
                 if (!pluginConfig) { continue; }
 
                 // get cmd / args
                 const guildConfig = client.guildConfigs.get(guildId);
-                const { command, args } = guildConfig.getCommandLineArgs(message.content);
+                let lines = message.content.split('\n');
+                for (let i = 0; i < lines.length; ++i) {
+                    lines[i] = guildConfig.getCommandLineArgs(lines[i]);
+                }
+                const { command, args } = lines[0];
 
                 // call funstion
                 value.execute(message, pluginConfig, command, args);
+            }
+        });
+
+        client.on('messageDelete', async (message) => {
+            if (message.partial) {
+                await message.fetch().then(() => { }).catch(() => { });
+            }
+
+            // Emitted
+            for (let [key, value] of client.commands) {
+                if (!value.messageDelete || typeof (value.messageDelete) != "function") { continue; }
+
+                // get pluginConfig
+                let { client, guildId } = message;
+                const pluginConfig = client.getPluginConfig(guildId, key);
+                if (!pluginConfig) { continue; }
+
+                value.messageDelete(message, pluginConfig);
+            }
+        });
+
+        client.on('interactionCreate', async (interaction) => {
+            const {message} = interaction;
+            if (message.partial) {
+                await message.fetch().then(() => { }).catch(() => { });
+            }
+
+            // Emitted
+            for (let [key, value] of client.commands) {
+                if (!value.interactionCreate || typeof (value.interactionCreate) != "function") { continue; }
+
+                // get pluginConfig
+                let { client, guildId } = message;
+                const pluginConfig = client.getPluginConfig(guildId, key);
+                if (!pluginConfig) { continue; }
+
+                value.interactionCreate(interaction, pluginConfig);
+            }
+        });
+
+        client.on('messageReactionAdd', async (reaction, user) => {
+            const {message} = reaction;
+            if (message.partial) {
+                await message.fetch().then(() => { }).catch(() => { });
+            }
+
+            // Emitted
+            for (let [key, value] of client.commands) {
+                if (!value.messageReactionAdd || typeof (value.messageReactionAdd) != "function") { continue; }
+
+                // get pluginConfig
+                let { client, guildId } = message;
+                const pluginConfig = client.getPluginConfig(guildId, key);
+                if (!pluginConfig) { continue; }
+
+                value.messageReactionAdd(reaction, user, pluginConfig);
+            }
+        });
+
+        client.on('messageReactionRemove', async (reaction, user) => {
+            const {message} = reaction;
+            if (message.partial) {
+                await message.fetch().then(() => { }).catch(() => { });
+            }
+
+            // Emitted
+            for (let [key, value] of client.commands) {
+                if (!value.messageReactionRemove || typeof (value.messageReactionRemove) != "function") { continue; }
+
+                // get pluginConfig
+                let { client, guildId } = message;
+                const pluginConfig = client.getPluginConfig(guildId, key);
+                if (!pluginConfig) { continue; }
+
+                value.messageReactionRemove(reaction, user, pluginConfig);
             }
         });
 
@@ -131,135 +221,8 @@ module.exports = {
 
 
 
-
-
-
-
-
-
-
-
-        // // load plugins
-        // if (fs.existsSync(`./plugins/`)) {
-        //     // get all js file list
-        //     const pluginFiles = fs.readdirSync(`./plugins/`)
-        //         .filter(file => file.endsWith('.js'));
-
-        //     // check plugins witch need
-        //     let plugins = [];
-        //     for (let gID of Object.keys(guildConfigs)) {
-        //         plugins = plugins.concat(
-        //             Object.keys(guildConfigs[gID]).filter(
-        //                 (key) => (
-        //                     !plugins.includes(key) &&
-        //                     !['name', 'perfix'].includes(key) &&
-        //                     // in debug mode, only run plugin in list
-        //                     (process.env.HOST_TYPE != 'debug' || debugPlugins.includes(key))
-        //                 )
-        //             )
-        //         );
-        //     }
-
-        //     for (const file of pluginFiles) {
-        //         const { name } = path.parse(file);
-
-        //         // skip unused plugin
-        //         if (!plugins.includes(name)) { continue; }
-
-        //         const plugin = require(`./plugins/${file}`);
-        //         client.commands.set(name, plugin);
-        //     }
-        // }
-
-        // const getCommandLineArgs = (msg) => {
-        //     let args = null, command = null;
-        //     if (perfix.test(msg)) {
-        //         args = msg.slice(1).split(/\s+/);
-        //         command = args.shift().toLowerCase();
-        //     }
-        //     return { command, args };
-        // }
-        // const getPluginConfig = (gID, pluginName) => {
-        //     // not work guild / not work plugin in this guild
-        //     if (!guildConfigs[gID] || !guildConfigs[gID][pluginName]) {
-        //         return null;
-        //     }
-        //     return guildConfigs[gID][pluginName];
-        // }
-        // client.getCommandLineArgs = getCommandLineArgs;
-        // client.getPluginConfig = getPluginConfig;
-
-        // // text command
-        // client.on('messageCreate', async (message) => {
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         console.log(key)
-        //         if (!value.execute || typeof (value.execute) != "function") { continue; }
-
-        //         // get pluginConfig
-        //         const pluginConfig = getPluginConfig(message.guildId || 'DM', key);
-        //         if (!pluginConfig) { continue; }
-
-        //         // get cmd / args
-        //         console.log(`messageCreate`);
-        //         const { command, args } = getCommandLineArgs(message.content);
-
-        //         value.execute(message, pluginConfig, command, args);
-        //         // .then(result => { console.log(`${value.name.padEnd(20, ' ')}: ${result}`); }); 
-        //     }
-        // });
-        // client.on('messageDelete', async (message) => {
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         if (!value.execute || typeof (value.execute) != "function") { continue; }
-
-        //         // get pluginConfig
-        //         const pluginConfig = getPluginConfig(message.guildId || 'DM', key);
-        //         if (!pluginConfig) { continue; }
-
-        //         value.messageDelete(message, pluginConfig);
-        //         // .then(result => { console.log(`${value.name.padEnd(20, ' ')}: ${result}`); }); 
-        //     }
-        // });
         // // for discord.js v13
-        // client.on('interactionCreate', async (interaction) => {
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         if (!value.interacted || typeof (value.interacted) != "function") { continue; }
 
-        //         // get pluginConfig
-        //         const pluginConfig = getPluginConfig(interaction.guildId || 'DM', key);
-        //         if (!pluginConfig) { continue; }
-
-        //         value.interacted(interaction, pluginConfig);
-        //     }
-        // });
-
-        // client.on('messageReactionAdd', async (reaction, user) => {
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         if (!value.messageReactionAdd || typeof (value.messageReactionAdd) != "function") { continue; }
-
-        //         // get pluginConfig
-        //         const pluginConfig = getPluginConfig(reaction.message.guildId || 'DM', key);
-        //         if (!pluginConfig) { continue; }
-
-        //         value.messageReactionAdd(reaction, user, pluginConfig);
-        //     }
-        // });
-
-        // client.on('messageReactionRemove', async (reaction, user) => {
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         if (!value.messageReactionRemove || typeof (value.messageReactionRemove) != "function") { continue; }
-
-        //         // get pluginConfig
-        //         const pluginConfig = getPluginConfig(reaction.message.guildId || 'DM', key);
-        //         if (!pluginConfig) { continue; }
-
-        //         value.messageReactionRemove(reaction, user, pluginConfig);
-        //     }
-        // });
 
         // // auto update guild member count
         // client.once('ready', async () => {
@@ -307,7 +270,7 @@ module.exports = {
         });
 
         // dc login
-        await client.login(discordToken);  //.then(console.log);
+        await client.login(client.mainConfigs.discordToken);  //.then(console.log);
         return client;
     },
 }

@@ -2,14 +2,6 @@
 module.exports = {      // SSRB的聚集地
     name: 'SSRB的聚集地',
     perfix: /^[\/\-!][\S]/,
-    getCommandLineArgs: function (msg) {
-        let args = null, command = null;
-        if (this.perfix.test(msg)) {
-            args = msg.slice(1).split(/\s+/);
-            command = args.shift().toLowerCase();
-        }
-        return { command, args };
-    },
 
     timeTag: {
         TIME_TAG_CHANNEL_ID: '828259412257800222',      // #✏直播時間tag
