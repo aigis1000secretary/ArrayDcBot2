@@ -8,6 +8,7 @@ const channelID = '1009645372831977482';
 module.exports = {
     name: 'ping',
     description: 'pong',
+    
     execute(message, pluginConfig, command, args, lines) {
 
         if (command != 'ping') { return; }

@@ -8,9 +8,6 @@ module.exports = {
 
     async messageDelete(message, pluginConfig) {
 
-        // Ignore direct messages
-        if (!message.guild) { return; }
-
         // Define the data
         let { client, channel, author, content, embeds, attachments } = message;
         if (!author) { return; }
@@ -18,7 +15,7 @@ module.exports = {
 
         // Since there's only 1 audit log entry in this collection, grab the first one
         let deletor = null;
-        if (message.guild.members.me.permissions.has(PermissionFlagsBits.ViewAuditLog) && author) {
+        if (message.guild && message.guild.members.me.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
             deletor = await message.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MessageDelete })
                 .then((audit) => audit.entries.first());
 
@@ -70,9 +67,6 @@ module.exports = {
 
     async messageUpdate(oldMessage, newMessage, pluginConfig) {
 
-        // Ignore direct messages
-        if (!message.guild) { return; }
-        
         if (oldMessage.content && oldMessage.content == newMessage.content) {
             return;
         }
