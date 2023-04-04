@@ -82,7 +82,7 @@ module.exports = {      // SSRB的聚集地
         WELCOME_MSG: '`歡迎${memberName}加入，請先去<#767724012934791168>看一下規則然後拿取你的身份組，<#781159554159345724>這邊有群組內的導覽。`'      // #伺服器規則中文版
     },
 
-    delmsgLogger: { LOG_CHANNEL_ID: '888239393716981830' },      // #訊息刪除區-測試版
+    // messageLogger: { LOG_CHANNEL_ID: '888239393716981830' },      // #訊息刪除區-測試版
     memberCounter: { COUNTER_CHANNEL_ID: '860528144367878154', },      // #群組人數: 4,840
     reactionRole: { RULE_CHANNEL_ID: '775754378736173087' },      // #特殊身份組領取區-role
     reactionVote: { VOTE_CHANNELS: ['827129069178978324'] },      // #投票區

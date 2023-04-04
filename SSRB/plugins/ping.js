@@ -43,7 +43,7 @@ module.exports = {
 
         if (!interaction.isButton()) { return false; }
         if (interaction.customId != 'ping') { return false; }
-        
+
         // mute reply
         interaction.reply({ content: ' ' }).catch(() => { });
 

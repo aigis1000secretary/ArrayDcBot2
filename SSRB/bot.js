@@ -134,6 +134,7 @@ module.exports = {
 
         client.on('messageDelete', async (message) => {
             if (message.partial) {
+                // console.log(`[messageDelete] partial`)
                 await message.fetch().then(() => { }).catch(() => { });
             }
 
@@ -150,8 +151,23 @@ module.exports = {
             }
         });
 
+        client.on('messageUpdate', async (oldMessage, newMessage) => {
+
+            // Emitted
+            for (let [key, value] of client.commands) {
+                if (!value.messageUpdate || typeof (value.messageUpdate) != "function") { continue; }
+
+                // get pluginConfig
+                let { client, guildId } = oldMessage;
+                const pluginConfig = client.getPluginConfig(guildId, key);
+                if (!pluginConfig) { continue; }
+
+                value.messageUpdate(oldMessage, newMessage, pluginConfig);
+            }
+        });
+
         client.on('interactionCreate', async (interaction) => {
-            const {message} = interaction;
+            const { message } = interaction;
             if (message.partial) {
                 await message.fetch().then(() => { }).catch(() => { });
             }
@@ -170,7 +186,7 @@ module.exports = {
         });
 
         client.on('messageReactionAdd', async (reaction, user) => {
-            const {message} = reaction;
+            const { message } = reaction;
             if (message.partial) {
                 await message.fetch().then(() => { }).catch(() => { });
             }
@@ -189,7 +205,7 @@ module.exports = {
         });
 
         client.on('messageReactionRemove', async (reaction, user) => {
-            const {message} = reaction;
+            const { message } = reaction;
             if (message.partial) {
                 await message.fetch().then(() => { }).catch(() => { });
             }
@@ -209,57 +225,41 @@ module.exports = {
 
 
 
+        // auto update guild member count
+        client.once('ready', async () => {
 
+            // dc bot online
+            console.log(`=====${client.mainConfigs.botName} is online!=====    setup plugins(${client.commands.size}):`);
 
+            // if (!fs.existsSync("./.env")) {
 
+            //     // const nowDate = new Date(Date.now());
+            //     // const hours = nowDate.getHours().toString().padStart(2, '0');
+            //     // const minutes = nowDate.getMinutes().toString().padStart(2, '0');
+            //     // await channel.send({ content: `<${hours}:${minutes}> ${botName} is online!` })
 
+            //     const channel = await client.channels.fetch(debugChannelID);
 
+            //     const nowHours = new Date(Date.now()).getHours();
+            //     const nowMinutes = new Date(Date.now()).getMinutes();
+            //     const rebooted =
+            //         ([1, 9, 17].includes(nowHours) && nowMinutes >= 55) ||  // in reboot time
+            //         ([2, 10, 18].includes(nowHours) && nowMinutes < 5);     // really reboot time
+            //     const type = rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH;
+            //     const nowDate = parseInt(Date.now() / 1000);
+            //     await channel.send({ content: `<t:${nowDate}>  <t:${nowDate}:R> 📳! ${type}` })
+            // }
 
+            // Emitted 
+            for (let [key, value] of client.commands) {
 
+                if (fs.existsSync("./.env")) {
+                    console.log(`··${value.name.padEnd(20, ' ')} <${value.description}>`);
+                }
+            }
 
+        });
 
-
-
-
-        // // for discord.js v13
-
-
-        // // auto update guild member count
-        // client.once('ready', async () => {
-
-        //     // dc bot online
-        //     console.log(`=====${botName} is online!=====    setup plugins(${client.commands.size}):`);
-        //     if (!fs.existsSync("./.env")) {
-
-        //         // const nowDate = new Date(Date.now());
-        //         // const hours = nowDate.getHours().toString().padStart(2, '0');
-        //         // const minutes = nowDate.getMinutes().toString().padStart(2, '0');
-        //         // await channel.send({ content: `<${hours}:${minutes}> ${botName} is online!` })
-
-        //         const channel = await client.channels.fetch(debugChannelID);
-
-        //         const nowHours = new Date(Date.now()).getHours();
-        //         const nowMinutes = new Date(Date.now()).getMinutes();
-        //         const rebooted =
-        //             ([1, 9, 17].includes(nowHours) && nowMinutes >= 55) ||  // in reboot time
-        //             ([2, 10, 18].includes(nowHours) && nowMinutes < 5);     // really reboot time
-        //         const type = rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH;
-        //         const nowDate = parseInt(Date.now() / 1000);
-        //         await channel.send({ content: `<t:${nowDate}>  <t:${nowDate}:R> 📳! ${type}` })
-        //     }
-
-        //     // Emitted 
-        //     for (let [key, value] of client.commands) {
-        //         if (!value.setup || typeof (value.setup) != "function") { continue; }
-
-        //         value.setup(client);
-
-        //         if (fs.existsSync("./.env")) {
-        //             console.log(`··${value.name.padEnd(20, ' ')} <${value.description}>`);
-        //         }
-        //     }
-
-        // });
 
         client.once('close', () => {
             // offline msg
