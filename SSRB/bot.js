@@ -188,6 +188,7 @@ module.exports = {
         client.on('messageReactionAdd', async (reaction, user) => {
             const { message } = reaction;
             if (message.partial) {
+                // console.log(`[messageReactionAdd] partial`)
                 await message.fetch().then(() => { }).catch(() => { });
             }
 
