@@ -7,7 +7,8 @@ module.exports = {
     clientSecret: process.env.DISCORD_713624995372466179_SECRET,
     resonance: 'ぼた',
     debugPlugins: [
-        `ping`
+        `ping`,
+        'uptimer'
     ],
 
     debugChannelID: '826992877925171250',

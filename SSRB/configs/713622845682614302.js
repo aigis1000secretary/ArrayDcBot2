@@ -28,5 +28,6 @@ module.exports = {      // KTG
 
     // messageLogger: { LOG_CHANNEL_ID: '1009645372831977482' },      // #_bot-test
 
+    // uptimer: {},
     ping: {},
 }

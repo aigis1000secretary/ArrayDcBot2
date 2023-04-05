@@ -29,7 +29,7 @@ module.exports = {
         });
 
         // configs
-        client.mainConfigs = new Object();
+        client.mainConfig = new Object();
         client.guildConfigs = new Discord.Collection();
         // require configs
         let filepath = path.join(__dirname, `./configs/`);
@@ -43,7 +43,7 @@ module.exports = {
 
                 if (name == 'config') {
 
-                    client.mainConfigs = require(`${filepath}${file}`);
+                    client.mainConfig = require(`${filepath}${file}`);
 
                 } else if (/^\d+$/.test(name)) {
 
@@ -92,7 +92,7 @@ module.exports = {
                 if (!plugins.includes(name)) { continue; }
                 // in debug mode, only run plugin in list
                 if (process.env.HOST_TYPE == 'debug' &&
-                    !client.mainConfigs.debugPlugins.includes(name)) { continue; }
+                    !client.mainConfig.debugPlugins.includes(name)) { continue; }
 
                 const plugin = require(`${filepath}${file}`);
                 client.commands.set(name, plugin);
@@ -230,7 +230,7 @@ module.exports = {
         client.once('ready', async () => {
 
             // dc bot online
-            console.log(`=====${client.mainConfigs.botName} is online!=====    setup plugins(${client.commands.size}):`);
+            console.log(`=====${client.mainConfig.botName} is online!=====    setup plugins(${client.commands.size}):`);
 
             // if (!fs.existsSync("./.env")) {
 
@@ -257,8 +257,13 @@ module.exports = {
                 if (fs.existsSync("./.env")) {
                     console.log(`··${value.name.padEnd(20, ' ')} <${value.description}>`);
                 }
-            }
 
+
+
+                if (!value.setup || typeof (value.setup) != "function") { continue; }
+
+                value.setup(client);
+            }
         });
 
 
@@ -271,7 +276,7 @@ module.exports = {
         });
 
         // dc login
-        await client.login(client.mainConfigs.discordToken);  //.then(console.log);
+        await client.login(client.mainConfig.discordToken);  //.then(console.log);
         return client;
     },
 }

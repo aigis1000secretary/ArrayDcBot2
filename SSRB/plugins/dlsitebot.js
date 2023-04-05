@@ -260,6 +260,7 @@ module.exports = {
     },
 
     async interactionCreate(interaction, pluginConfig) {
+        // command type
         if (!interaction.isButton()) { return false; }
         if (!interaction.customId.startsWith("dlThumb")) { return false; }
 
