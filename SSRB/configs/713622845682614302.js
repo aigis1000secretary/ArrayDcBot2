@@ -3,14 +3,14 @@ module.exports = {      // KTG
     name: 'KTG',
     perfix: /(^[\/\-!~])[\S]/,
 
-    memberChecker2: [
+    memberChecker3: [
         {
             holoChannelID: 'UCUKD-uaobj9jiqB-VXt71mA',   // SSRB
             expiresKey: 'ssrb_expires',
-            memberRoleID: '927501058484371487',      // @&SSRB
+            memberRoleID: '1009001004454383656',      // @&TEST
             logChannelID: '713623232070156309',      // #_log
-            streamChannelID: '1010167343378333768',      // #⚫_stream2
-            memberChannelID: '1010167418598981652',      // #⚫_member2
+            streamChannelID: '1008565763260551188',      // #⚫_stream
+            memberChannelID: '1010005672152281218',      // #⚫_member
             startTagChannelID: null,
             // apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7],   // SSRB
             // apiKey: [process.env.YOUTUBE_APIKEY_8, process.env.YOUTUBE_APIKEY_9],   // KZMI
@@ -28,6 +28,5 @@ module.exports = {      // KTG
 
     // messageLogger: { LOG_CHANNEL_ID: '1009645372831977482' },      // #_bot-test
 
-    // uptimer: {},
     ping: {},
 }

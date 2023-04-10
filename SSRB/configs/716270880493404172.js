@@ -8,18 +8,18 @@ module.exports = {      // SSRB的聚集地
         DEBUG_TAG_LOG_CHANNEL_ID: '851618481350770738',
     },
 
-    memberChecker2: [
-        {
-            holoChannelID: 'UCUKD-uaobj9jiqB-VXt71mA',   // SSRB,
-            expiresKey: 'ssrb_expires',
-            memberRoleID: '847652060903243846',      // @&ししろん的食物
-            logChannelID: '904053455377825833',      // #會限認證紀錄
-            streamChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
-            memberChannelID: '790236195794976808',  // #獅白會限直播討論用
-            startTagChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
-            apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7]    // SSRB
-        }
-    ],
+    // memberChecker3: [
+    //     {
+    //         holoChannelID: 'UCUKD-uaobj9jiqB-VXt71mA',   // SSRB,
+    //         expiresKey: 'ssrb_expires',
+    //         memberRoleID: '847652060903243846',      // @&ししろん的食物
+    //         logChannelID: '904053455377825833',      // #會限認證紀錄
+    //         streamChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
+    //         memberChannelID: '790236195794976808',  // #獅白會限直播討論用
+    //         startTagChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
+    //         apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7]    // SSRB
+    //     }
+    // ],
 
     spamBotKicker: {
         LOG_CHANNEL_ID: '888239393716981830',      // #訊息刪除區-測試版
