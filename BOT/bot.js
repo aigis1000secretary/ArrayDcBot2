@@ -269,7 +269,7 @@ module.exports = {
 
         client.once('close', () => {
             // offline msg
-            console.log(`${botName} is offline!`);
+            console.log(`${client.mainConfig.botName} is offline!`);
 
             // destroy dc thread
             client.destroy();
