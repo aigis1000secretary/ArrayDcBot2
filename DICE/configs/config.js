@@ -1,7 +1,7 @@
 
 // online bot cfg
 module.exports = {
-    botName: 'SSRB',
+    botName: 'DICE',
     botID: '427025310291197954',
     discordToken: process.env.DISCORD_427025310291197954_BOTTOKEN,
     clientSecret: process.env.null,
@@ -9,7 +9,7 @@ module.exports = {
     debugPlugins: [
         `ping`,
         'uptimer',
-        'reboot',
+        'reportThread',
     ],
 
     debugChannelID: '1024627739023650827',

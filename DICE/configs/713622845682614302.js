@@ -25,11 +25,14 @@ module.exports = {      // KTG
         //     holoChannelID: 'UC1uv2Oq6kNxgATlCiez59hw',   // towa
         // }
     ],
+    reportThread: {
+        REPORT_CHANNEL_ID: '1024627536862400582',      // #_report
+        ADMIN_ROLE_ID: '881775866835763240',      // @&==BOT==
+    },
 
     // messageLogger: { LOG_CHANNEL_ID: '1009645372831977482' },      // #_bot-test
 
     memberCounter: { COUNTER_CHANNEL_ID: '1024628239865491486' },      // #群組人數: 4,840
 
-    reboot: {},
     ping: {},
 }
