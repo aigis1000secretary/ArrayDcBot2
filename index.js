@@ -26,7 +26,10 @@ module.exports.terminate = async () => {
     if (process.env.HOST_TYPE == 'debug') { process.env.HOST_URL = 'https://a363-122-116-50-201.ngrok.io'; }
 
 
-    for (const bot of ['SSRB']) {
+    for (const bot of [
+        // 'SSRB',
+        'DICE'
+    ]) {
         const botPath = `./${bot}`;
 
         const botJs = `${botPath}/bot.js`;

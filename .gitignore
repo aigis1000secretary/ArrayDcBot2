@@ -16,3 +16,6 @@ blacklist/
 
 SSRB/bot.js
 SSRB/plugins/*.js
+
+DICE/bot.js
+DICE/plugins/*.js
