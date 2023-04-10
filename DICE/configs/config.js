@@ -9,8 +9,7 @@ module.exports = {
     debugPlugins: [
         `ping`,
         'uptimer',
-        'reactionRole',
-        'reactionVote',
+        'reboot',
     ],
 
     debugChannelID: '1024627739023650827',

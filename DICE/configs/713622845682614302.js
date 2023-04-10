@@ -30,8 +30,6 @@ module.exports = {      // KTG
 
     memberCounter: { COUNTER_CHANNEL_ID: '1024628239865491486' },      // #群組人數: 4,840
 
-    reactionRole: { RULE_CHANNEL_ID: '1024628143232925706' },      // #_rule
-    reactionVote: { VOTE_CHANNELS: ['1024628162207957032'] },      // #_vote
-    
+    reboot: {},
     ping: {},
 }
