@@ -81,8 +81,7 @@ module.exports = {
         msg.delete().catch(() => { });
     },
 
-
-
-
+    setup(client) {
+    },
 
 }

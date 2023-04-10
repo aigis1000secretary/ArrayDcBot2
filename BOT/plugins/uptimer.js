@@ -19,10 +19,15 @@ class timerCore {
     constructor(_client) {
         this.client = _client;
 
+        // clock
         const timeoutMethod = () => {
             const now = Date.now();
-            // check every 1sec (time offset = 1.5 sec - (time in Milliseconds % 1sec))
-            this.interval = setTimeout(timeoutMethod, 500 - now % 1000 + 1000);
+            // get trim time
+            const nowTime = (now % 1000 > 500) ? (now - (now % 1000) + 1000) : (now - (now % 1000));
+            // check every 1sec
+            const nextTime = nowTime + 1000;
+            const offsetTime = nextTime - now;
+            this.interval = setTimeout(timeoutMethod, offsetTime);
 
             this.clockMethod(now);
         }
