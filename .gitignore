@@ -1,7 +1,6 @@
 
 .vscode
 node_modules/
-configs_/
 
 .env
 
@@ -14,3 +13,6 @@ ngrok/
 ngrok.zip
 
 blacklist/
+
+SSRB/bot.js
+SSRB/plugins/*.js
