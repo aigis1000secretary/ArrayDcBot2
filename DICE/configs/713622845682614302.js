@@ -30,9 +30,33 @@ module.exports = {      // KTG
         ADMIN_ROLE_ID: '881775866835763240',      // @&==BOT==
     },
 
-    // messageLogger: { LOG_CHANNEL_ID: '1009645372831977482' },      // #_bot-test
+    rssbot: [
+        {
+            RSS_CHANNEL_ID: `1024630418999353386`,      // #hentai-voice-音声
+            RSS_FEEDURL: `https://hentai-share.com/category/hentai-voice-%e9%9f%b3%e5%a3%b0/feed/`
+        }, {
+            RSS_CHANNEL_ID: '1024630418999353386',      // #hentai-voice-音声
+            RSS_FEEDURL: `https://www.vivahentai4u.net/category/hentai-voice/feed/`
+        }
+    ],
 
+    // /*
+    spambotKicker: {
+        LOG_CHANNEL_ID: '1024627281592848434',      // #_log
+        PERMISSION_ROLE_ID: '1009001004454383656',      // @&TEST
+        // PERMISSION_ROLE_ID: null,
+        BAN_CHANNEL_ID: '1024627481111691275'      // #_ban
+    },//*/
+
+
+
+    messageLogger: { LOG_CHANNEL_ID: '1024627281592848434' },      // #_bot-test
     memberCounter: { COUNTER_CHANNEL_ID: '1024628239865491486' },      // #群組人數: 4,840
+    reactionRole: { RULE_CHANNEL_ID: '1024628143232925706' },      // #_role
 
+    superChat: {},
+    dlsitebot: {},
+    streamStartTime: {},
+    // uptimer: {},
     ping: {},
 }

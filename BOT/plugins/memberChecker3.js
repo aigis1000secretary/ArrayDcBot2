@@ -400,8 +400,7 @@ class memberCheckerCore {
     };
 
     // timer
-    interval = null;
-    clockMethod = async (now) => {
+    async clockMethod(now) {
         // check stream task list at XX:03:00
         let nowDate = new Date(now);
         if (![3, 4, 5, 7, 9, 11].includes(nowDate.getHours()) &&
@@ -426,23 +425,6 @@ class memberCheckerCore {
 
         // check expires user
         await this.checkExpiresUser();
-
-        // clock
-        const timeoutMethod = () => {
-            const now = Date.now();
-            // get trim time
-            const nowTime = (now % 1000 > 500) ? (now - (now % 1000) + 1000) : (now - (now % 1000));
-            // check every 1sec
-            const nextTime = nowTime + 1000;
-            const offsetTime = nextTime - now;
-            this.interval = setTimeout(timeoutMethod, offsetTime);
-
-            this.clockMethod(now);
-        }
-        this.interval = setTimeout(timeoutMethod, 2000);
-        this.client.once('close', () => {
-            clearTimeout(this.interval);
-        });
     }
 
     get301Url() {
@@ -741,7 +723,9 @@ module.exports = {
             }
         }
 
-    }
+    },
+
+    clockMethod(client, { hours, minutes, seconds }) { }
 }
 
 

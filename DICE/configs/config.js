@@ -8,8 +8,13 @@ module.exports = {
     resonance: 'ダイ',
     debugPlugins: [
         `ping`,
-        'uptimer',
-        'reportThread',
+        // 'uptimer',
+        'rssbot', 'dlsitebot',
+        'memberCounter',
+        // 'spambotKicker',
+        'streamStartTime',
+        'reactionRole',
+        'superChat',
     ],
 
     debugChannelID: '1024627739023650827',

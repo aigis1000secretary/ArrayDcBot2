@@ -258,19 +258,48 @@ module.exports = {
                     console.log(`··${value.name.padEnd(20, ' ')} <${value.description}>`);
                 }
 
-
-
                 if (!value.setup || typeof (value.setup) != "function") { continue; }
 
                 value.setup(client);
             }
+
+
+
+
+
+            // clock
+            const timeoutMethod = () => {
+                const now = Date.now();
+                // get trim time
+                const nowTime = (now % 1000 > 500) ? (now - (now % 1000) + 1000) : (now - (now % 1000));
+                // check every 1sec
+                const nextTime = nowTime + 1000;
+                const offsetTime = nextTime - now;
+                client.interval = setTimeout(timeoutMethod, offsetTime);
+
+                const nowDate = new Date(nowTime);
+                const hours = nowDate.getHours();
+                const minutes = nowDate.getMinutes();
+                const seconds = nowDate.getSeconds();
+
+
+
+                for (let [key, value] of client.commands) {
+
+                    if (!value.clockMethod || typeof (value.clockMethod) != "function") { continue; }
+
+                    value.clockMethod(client, { hours, minutes, seconds });
+                }
+            }
+            client.interval = setTimeout(timeoutMethod, 2000);
         });
 
-
+        client.interval = null;
         client.once('close', () => {
             // offline msg
             console.log(`${client.mainConfig.botName} is offline!`);
 
+            clearTimeout(client.interval);
             // destroy dc thread
             client.destroy();
         });

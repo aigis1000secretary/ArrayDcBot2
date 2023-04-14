@@ -35,11 +35,11 @@ module.exports = {
         } else if (reaction.emoji.name == EMOJI_RECYCLE) {
             // ♻️
 
-            // check message target
-            if (!content.startsWith(`https://vxtwitter.com/`)) { return; }
-
             // check deletable
             if (message.author.id != client.user.id || !message.deletable) { return; }
+
+            // check message target
+            if (!content.startsWith(`https://vxtwitter.com/`)) { return; }
 
             setTimeout(() => message.delete().catch(() => { }), 250);
         }

@@ -1,53 +1,31 @@
 module.exports = {
     name: 'memberCounter',
     description: "member counter",
-    interval: null,
-    client: null,
 
-    async clockMethod(nowTime) {
-        if (!this.client) { return; }
+    async clockMethod(client, { hours, minutes, seconds }) {
+        // check every 10 sec
+        if (seconds % 10 != 0) { return; }
 
-        for (let gID of this.client.guildConfigs.keys()) {
+        for (let gID of client.guildConfigs.keys()) {
 
-            const pluginConfig = this.client.getPluginConfig(gID, 'memberCounter');
+            const pluginConfig = client.getPluginConfig(gID, 'memberCounter');
             if (!pluginConfig) { continue; }
             const cID = pluginConfig.COUNTER_CHANNEL_ID;
 
-            const guild = await this.client.guilds.fetch(gID);
+            const guild = await client.guilds.fetch(gID);
             if (!guild) { continue; }
-            const channel = await this.client.channels.fetch(cID);
+            const channel = await client.channels.fetch(cID);
             if (!channel) { continue; }
 
             const memberCount = guild.memberCount;
             const channelName = channel.name;
+            const newName = `群組人數-${memberCount.toLocaleString()}`;
 
-            await channel.setName(`群組人數: ${memberCount.toLocaleString()}`).catch((error) => { console.log(error.message); });
-
-            // if (channelName != channel.name) {
-            //     console.log('Updating Member Count');
-            // }
+            if (channelName != newName) {
+                channel.setName(newName)
+                    .then(newChannel => console.log(`Updating Member Count ${newChannel.name}`))
+                    .catch((error) => { console.log(error.message); });
+            }
         }
     },
-
-    setup(client) {
-        this.client = client;
-
-        // clock
-        const timeoutMethod = () => {
-            const now = Date.now();
-            // get trim time
-            const nowTime = (now % 1000 > 500) ? (now - (now % 1000) + 1000) : (now - (now % 1000));
-            // check every 5sec
-            const nextTime = nowTime + 5000;
-            const offsetTime = nextTime - now;
-            this.interval = setTimeout(timeoutMethod, offsetTime);
-
-            this.clockMethod(now);
-        }
-        this.interval = setTimeout(timeoutMethod, 2000);
-        client.once('close', () => {
-            clearTimeout(this.interval);
-        });
-
-    }
 }
