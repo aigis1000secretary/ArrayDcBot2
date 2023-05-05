@@ -30,23 +30,14 @@ module.exports.terminate = async () => {
         // 'SSRB',
         'DICE'
     ]) {
-        const botPath = `./${bot}`;
+        const configPath = `./configs/${bot}/`;
 
-        const botJs = `${botPath}/bot.js`;
-        if (fs.existsSync(botJs)) { fs.unlinkSync(botJs); }
 
-        const botPlugins = `${botPath}/plugins`;
-        if (fs.existsSync(botPlugins)) { fs.rmdirSync(botPlugins, { recursive: true, force: true }); }
+        if (fs.existsSync(`./bot.js`)) {
+            let botJs = require(`./bot.js`);
 
-        fs.copyFileSync(`./BOT/bot.js`, botJs);
-        fs.mkdirSync(botPlugins);
-        for (const plugin of fs.readdirSync(`./BOT/plugins`)) {
-            fs.copyFileSync(`./BOT/plugins/${plugin}`, `${botPlugins}/${plugin}`);
-        }
-
-        if (fs.existsSync(botJs)) {
-            let bot = require(botJs)
-            clients.push(await bot.init());
+            let client = await botJs.init(configPath);
+            clients.push(client);
         }
     }
 

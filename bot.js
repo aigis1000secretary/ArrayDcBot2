@@ -11,7 +11,7 @@ const { GatewayIntentBits, Partials } = require('discord.js');
 
 
 module.exports = {
-    async init() {
+    async init(filepath) {
         // client init
         const client = new Discord.Client({
             intents: [
@@ -31,28 +31,29 @@ module.exports = {
         // configs
         client.mainConfig = new Object();
         client.guildConfigs = new Discord.Collection();
+
+        if (!fs.existsSync(filepath)) { return null; }
+
         // require configs
-        let filepath = path.join(__dirname, `./configs/`);
-        if (fs.existsSync(filepath)) {
-            // get all js file list
-            const configFiles = fs.readdirSync(filepath)
-                .filter(file => file.endsWith('.js'));
+        // get all js file list
+        const configFiles = fs.readdirSync(filepath)
+            .filter(file => file.endsWith('.js'));
 
-            for (const file of configFiles) {
-                const { name } = path.parse(file);
+        for (const file of configFiles) {
+            const { name } = path.parse(file);
 
-                if (name == 'config') {
+            if (name == 'config') {
+                // main config
+                client.mainConfig = require(`${filepath}${file}`);
 
-                    client.mainConfig = require(`${filepath}${file}`);
+            } else if (/^\d+$/.test(name)) {
+                // guild config
+                const config = require(`${filepath}${file}`);
+                client.guildConfigs.set(name, config);
 
-                } else if (/^\d+$/.test(name)) {
-
-                    const config = require(`${filepath}${file}`);
-                    client.guildConfigs.set(name, config);
-
-                }
             }
         }
+
         const getCommandLineArgs = function (msg) {
             let args = null, command = null;
             if (this.perfix.test(msg)) {

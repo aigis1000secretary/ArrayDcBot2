@@ -39,7 +39,7 @@ module.exports = {
         let { message, user } = interaction;
         let { channel } = message;
 
-        if (!channel || channel.id != channelID) { return; }
+        // if (!channel || channel.id != channelID) { return; }
         if (!user || user.bot) { return; }
 
         if (!interaction.isButton()) { return false; }
@@ -52,7 +52,6 @@ module.exports = {
 
         await sleep(3000);
         msg.delete().catch(() => { });
-
     },
 
     async messageReactionAdd(reaction, user, pluginConfig) {
