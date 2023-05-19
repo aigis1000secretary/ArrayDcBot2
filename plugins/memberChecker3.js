@@ -3,6 +3,8 @@
 const fs = require('fs');
 const debug = fs.existsSync("./.env");
 
+const { default: YTDlpWrap } = require("yt-dlp-wrap");
+
 let mclog = debug ? console.log : () => { };
 const sleep = (ms) => { return new Promise(resolve => setTimeout(resolve, ms)); };
 
@@ -32,148 +34,195 @@ const pgConfig = {
 const pool = new Pool(pgConfig);
 pool.connect().then(p => { p.end(); }).catch(console.error); // test connect
 const memberTime = 1000 * 60 * 60 * 24 * 35;    // 1000 ms  *  60 sec  *  60 min  *  24 hr  *  35 days
-const memberTemp = 1000 * 60 * 60 * 24;         // 1000 ms  *  60 sec  *  60 min  *  24 hr
+// const memberTemp = 1000 * 60 * 60 * 24;         // 1000 ms  *  60 sec  *  60 min  *  24 hr
 
 const coreArray = [];
 
-class pg {
-    expiresKey = '';
-    constructor(config = {}) { this.init(config); };
-    init({ expiresKey }) {
-        this.expiresKey = expiresKey;
+class Pg {
+    static dataCache = new Map();
+
+    static async init() {
+        // check table
+        if ((await this.checkTable())?.rowCount == 0) {
+            console.log(`init user_connections database!`);
+            await this.creatTable();
+        }
+
+        // load cache
+        const sql = `SELECT * FROM user_connections;`
+        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        if (res) {
+            for (let pgUser of res.rows) {
+                pgUser.discord_id = pgUser.discord_id.trim();
+                this.dataCache.set(pgUser.discord_id, pgUser);
+            }
+        }
+    };
+
+    static async initColumn(expiresKey) {
+        // check column
+        if (!await this.checkColumn(expiresKey)) {
+            console.log(`init column <${expiresKey}>!`);
+            await this.creatColumn(expiresKey);
+        }
+
+        // update cache
+        for (let key of this.dataCache.keys()) {
+            this.dataCache.get(key)[expiresKey] = '0';
+        }
     };
 
     // table api
-    async listTable() {
+    static async listTable() {
         const sql = `SELECT * FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';`;
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res.rows : null;
+        return res;
     };
-    async checkTable() {
+    static async checkTable() {
         const sql = `SELECT * FROM pg_catalog.pg_tables WHERE tablename='user_connections';`
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return ((res && res.rows.length > 0) ? res.rows : null);
+        return res;
     };
-    async creatTable() {
+    static async creatTable() {
         const sql = [
             `CREATE TABLE user_connections (`,
             `discord_id char(19) PRIMARY KEY,`,
             `youtube_id char(24) NOT NULL,`,
-            `${this.expiresKey} bigint NOT NULL DEFAULT 0`,
             `);`
         ].join(' ');
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
         return res ? res.rows : null;
     };
-    async checkColumn() {
-        const sql = `SELECT ${this.expiresKey} FROM user_connections;`
+
+    // column api
+    static async checkColumn(expiresKey) {
+        const sql = `SELECT ${expiresKey} FROM user_connections;`
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res.rows : null;
+        return res;
     };
-    async creatColumn() {
-        const sql = `ALTER TABLE user_connections ADD COLUMN ${this.expiresKey} bigint NOT NULL DEFAULT 0;`
+    static async creatColumn(expiresKey) {
+        const sql = `ALTER TABLE user_connections ADD COLUMN ${expiresKey} bigint NOT NULL DEFAULT 0;`
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res.rows : null;
+        return res;
+    };
+    static async deleteColumn(expiresKey) {
+        const sql = `ALTER TABLE user_connections DROP COLUMN ${expiresKey};`
+        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        return res;
+    };
+
+    // list api
+    static async listUserID() {
+        return { rows: this.dataCache.keys() };
+
+        // const sql = `SELECT discord_id FROM user_connections;`
+        // const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        // if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+        // return res;
+    };
+    static async listUserData() {
+        return { rows: this.dataCache };
+
+        // const sql = `SELECT * FROM user_connections;`
+        // const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        // if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+        // return res;
+    };
+    static async listExpiresUserID(expiresKey, expires = Date.now()) {
+        return { rows: Array.from(this.dataCache.values()).filter((pgUser) => (pgUser[expiresKey] < expires && pgUser[expiresKey] > 0)) };
+
+        // const sql = [
+        //     `SELECT (discord_id) FROM user_connections`,
+        //     `WHERE ${expiresKey}<=${expires}`,
+        //     `AND ${expiresKey}>0;`
+        // ].join(' ');
+        // const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        // if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+        // return res;
     };
 
     // data api
-    async listUserID() {
-        const sql = `SELECT discord_id FROM user_connections;`
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
-        return res ? res.rows : null;
+    static async getDataByDiscordID(discordID) {
+        return { rows: Array.from(this.dataCache.values()).filter((pgUser) => (pgUser.discord_id == discordID)) };
+
+        // const sql = [
+        //     `SELECT * FROM user_connections`,
+        //     `WHERE discord_id='${discordID}';`
+        // ].join(' ');
+        // const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        // if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+        // return res;
     };
-    async listUserData() {
-        const sql = `SELECT * FROM user_connections;`
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
-        return res ? res.rows : [];
+    static async getDataByYoutubeID(youtubeID) {
+        return { rows: Array.from(this.dataCache.values()).filter((pgUser) => (pgUser.youtube_id == youtubeID)) };
+
+        // const sql = [
+        //     `SELECT * FROM user_connections`,
+        //     `WHERE youtube_id='${youtubeID}';`
+        // ].join(' ');
+        // const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+        // if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+        // return res;
     };
-    async listExpiresUserID(expires = Date.now()) {
+    static async creatData(discordID, youtubeID) {
         const sql = [
-            `SELECT (discord_id) FROM user_connections`,
-            `WHERE ${this.expiresKey}<=${expires}`,
-            `AND ${this.expiresKey}>0;`
+            `INSERT INTO user_connections (discord_id, youtube_id)`,
+            `VALUES ('${discordID}', '${youtubeID}');`
         ].join(' ');
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
-        return res ? res.rows : [];
+
+        {
+            const sql = [
+                `SELECT * FROM user_connections`,
+                `WHERE discord_id='${discordID}';`
+            ].join(' ');
+            const res = await pool.query(sql).catch((error) => { console.log(error.message) });
+            if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
+            this.dataCache.set(discordID, res.rows[0]);
+        }
+
+        return res;
     };
-    async getDataByDiscordID(discordID) {
+    static async deleteData(discordID) {
+        this.dataCache.delete(discordID);
+
         const sql = [
-            `SELECT * FROM user_connections`,
+            `DELETE FROM user_connections`,
             `WHERE discord_id='${discordID}';`
         ].join(' ');
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
-        return res ? res.rows[0] : null;
+        return res;
     };
-    async getDataByYoutubeID(youtubeID) {
-        const sql = [
-            `SELECT * FROM user_connections`,
-            `WHERE youtube_id='${youtubeID}';`
-        ].join(' ');
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
-        return res ? res.rows[0] : null;
-    };
-    async insertData(discordID, youtubeID) {
-        // duplicate key value violates unique 
-        let data = await this.getDataByDiscordID(discordID);
-        if (data) {
-            // found old data
-            if (data[this.expiresKey] == 0) {
-                await this.updateExpires(discordID, (Date.now() + memberTemp));
-            }
-            // return await this.getDataByDiscordID(discordID);
-            return true;
-        }
 
-        // insert data
-        const sql = [
-            `INSERT INTO user_connections (discord_id, youtube_id, ${this.expiresKey})`,
-            `VALUES ('${discordID}', '${youtubeID}', ${Date.now() + memberTemp});`
-        ].join(' ');
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res : null;
-    };
-    async deleteData(discordID) {
-        // delete data
-        const sql = [
-            `DELETE FROM user_connections`,
-            `WHERE discord_id='${discordID};'`
-        ].join(' ');
+    static async updateYoutubeID(discordID, youtubeID) {
+        this.dataCache.get(discordID).youtube_id = youtubeID;
 
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res : null;
-    };
-    async updateYoutubeID(discordID, youtubeID) {
-        if (!await this.getDataByDiscordID(discordID)) { return null; }
-        // insert data
         const sql = [
             `UPDATE user_connections`,
             `SET youtube_id='${youtubeID}'`,
             `WHERE discord_id='${discordID}';`
         ].join(' ');
         const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res : null;
+        return res;
     };
-    async updateExpires(discordID, expires = (Date.now() + memberTime)) {
-        if (!await this.getDataByDiscordID(discordID)) { return null; }
-        // insert data
+    static async updateExpires(discordID, expiresKey, expires = (Date.now() + memberTime)) {
+        this.dataCache.get(discordID)[expiresKey] = expires;
+
         const sql = [
             `UPDATE user_connections`,
-            `SET ${this.expiresKey}=${expires}`,
+            `SET ${expiresKey}=${expires}`,
             `WHERE discord_id='${discordID}';`
         ].join(' ');
-        const res = await pool.query(sql).catch((error) => { console.log(error.message) });
-        return res ? res : null;
+        const res = await pool.query(sql).catch((error) => { console.log(sql); console.log(error.message) });
+        return res;
     };
 }
-class youtube {
+
+class YoutubeAPI {
     holoChannelID = 'holoChannelID';
     apiKey = [];
     quotaExceeded = [false, false];
+
     constructor(config = {}) { this.init(config); };
     init({ holoChannelID, apiKey }) {
         this.holoChannelID = holoChannelID;
@@ -182,7 +231,7 @@ class youtube {
 
     // youtube api
     async getVideoSearch({ channelId = this.holoChannelID, eventType, order, publishedAfter } = {}) {
-        mclog(`youtube.getVideoSearch( ${channelId}, ${eventType} )`);
+        mclog(`[MC] youtube.getVideoSearch( ${channelId}, ${eventType} )`);
         if (this.quotaExceeded[0]) {
             return {
                 code: 403, message: 'quotaExceeded', reason: 'quotaExceeded',
@@ -237,7 +286,7 @@ class youtube {
             if (!Array.isArray(error.errors) || !error.errors[0]) {
                 console.log(error);
                 // return { code: error.code || null, error };
-                return [];
+                return null;
             }
 
             if (error.code == 403 && error.errors[0].reason == 'quotaExceeded') {
@@ -250,11 +299,11 @@ class youtube {
             //     reason: error.errors[0].reason,
             //     variabale: { channelId, eventType, order, publishedAfter }
             // }
-            return [];
+            return null;
         }
     };
     async getVideoStatus(vID) {
-        mclog(`youtube.getVideoStatus( ${vID} )`);
+        mclog(`[MC] youtube.getVideoStatus( ${vID} )`);
         if (this.quotaExceeded[0]) {
             // return {
             //     code: 403, message: 'quotaExceeded', reason: 'quotaExceeded',
@@ -340,270 +389,834 @@ class youtube {
             return null;
         }
     };
-}
 
-class streamVideo {
-    video; filepath; indexOfLine; status;
-    constructor({ video, filepath, indexOfLine, status }) {
-        this.video = video || null;
-        this.filepath = filepath || null;
-        this.indexOfLine = indexOfLine || null;
-        this.status = status || null;
-    }
-}
+    async getStreamChat(liveChatId, pageToken) {
+        if (this.quotaExceeded[1]) {
+            return {
+                code: 403, message: 'quotaExceeded', reason: 'quotaExceeded',
+                variabale: { liveChatId, pageToken }
+            };
+        }
 
-class memberCheckerCore {
-    cacheStreamList = new Map();
-    cacheMemberList = [];
-
-    // interface
-    pg = new pg();
-    youtube = new youtube();
-
-    // setting
-    // client object
-    client = null;
-
-
-    // config
-    expiresKey;
-    guild; memberRole;
-    logChannelID; startTagChannelID;
-    streamChannelID; memberChannelID;
-    botID; clientSecret;
-    dcPushEmbed = () => { };
-
-    constructor(_client, config, guild, role) {
-        // interface
-        this.pg.init(config);
-        this.youtube.init(config);
-        // client object
-        this.client = _client;
-        // config
-        this.expiresKey = config.expiresKey;
-        this.guild = guild;
-        this.memberRole = role;
-        this.logChannelID = config.logChannelID;
-        this.startTagChannelID = config.startTagChannelID;
-        this.streamChannelID = config.streamChannelID;
-        this.memberChannelID = config.memberChannelID;
-        this.botID = _client.user.id;
-        this.clientSecret = _client.mainConfig.clientSecret;
-
-        _client.channels.fetch(config.logChannelID).then((channel) => {
-            if (channel) {
-                this.dcPushEmbed = (embed) => { return channel.send({ embeds: [embed] }).catch(console.log); };
-            } else {
-                this.dcPushEmbed = (embed) => { console.log(embed.description || embed.data.description); };
+        try {
+            const url = 'https://www.googleapis.com/youtube/v3/liveChat/messages';
+            const params = {
+                // part: 'id,snippet,authorDetails',
+                part: 'id,authorDetails',
+                key: this.apiKey[1],
+                liveChatId,
+                pageToken
             }
-        });
+            mclog(`[MC] youtube.getStreamChat( ${liveChatId}, ${pageToken} )`);
+            const res = await get({ url, qs: params, json: true });
+
+            // throw error
+            if (res.statusCode != 200 || (res.body && res.body.error)) {
+                if (res.statusCode == 404) {
+                    throw {
+                        code: 404, message: 'Error 404 (Not Found)!!',
+                        errors: [{
+                            message: 'Error 404 (Not Found)!!',
+                            domain: 'global', reason: 'Not Found'
+                        }],
+                    };
+                }
+                else if (res.body) { throw res.body.error ? res.body.error : res.body; }
+                else throw res;
+            }
+
+            // get response data
+            const data = res.body;
+            return data;
+            // return
+            // const returnResult = {
+            //     kind: 'youtube#liveChatMessageListResponse',
+            //     etag: 'k2roznPdnguYKdn3FWiXBQQrv6w',
+            //     pollingIntervalMillis: 5008,
+            //     pageInfo: { totalResults: 200, resultsPerPage: 200 },
+            //     nextPageToken: 'GKvSj6q1z_kCIJmkya21z_kC',
+            //     items: [
+            //         {
+            //             kind: 'youtube#liveChatMessage',
+            //             etag: 'JlqT1lUOml7QnSJvw8q-3RsVYCU',
+            //             id: 'LCC.CjgKDQoLWEZGYmtnejZ5QmsqJwoYVUMtaE02WUp1TllWQW1VV3hlSXI5RmVBEgtYRkZia2d6NnlCaxJFChpDT2FSaHFHMXpfa0NGWk1DclFZZFpPY0JzQRInQ0txT3B2SzB6X2tDRmZlUlZnRWRPTUFEbmcxNjYwNzkyMjQ5MjA4',
+            //             authorDetails: [Object]
+            //         }
+            //     ]
+            // }
+
+        } catch (error) {
+            // unknown error
+            if (!Array.isArray(error.errors) || !error.errors[0]) {
+                console.log(error);
+                return { code: error.code || null, error };
+            }
+
+            if (error.code == 403 && error.errors[0].reason == 'quotaExceeded') {
+                this.quotaExceeded[1] = true;
+            }
+            console.log(`youtube.getStreamChat ${error.errors[0].reason}`);
+            return {
+                code: error.code,
+                message: error.message,
+                reason: error.errors[0].reason,
+                variabale: { liveChatId, pageToken }
+            }
+        }
+    };
+}
+
+class McChannelCore {
+
+    // add api key
+    holoChannelID = '';
+    youtube = new YoutubeAPI();
+
+    constructor({ holoChannelID, apiKey }) {
+        this.holoChannelID = holoChannelID;
+        this.youtube = new YoutubeAPI({ holoChannelID, apiKey });
     };
 
-    // timer
-    async clockMethod(now) {
-        // check stream task list at XX:03:00
-        let nowDate = new Date(now);
-        if (![3, 4, 5, 7, 9, 11].includes(nowDate.getHours()) &&
-            nowDate.getMinutes() == 3 &&
-            nowDate.getSeconds() == 0) {
-            this.cacheStreamLists();
+    // get live/upcoming stream by channel ID
+    streamList = new Map(); // <vID, video>
+    async getVideoList() {
+
+        for (let eventType of ['upcoming', 'live']) {
+            // get search
+            let _videos = await this.youtube.getVideoSearch({ eventType });
+
+            // check result
+            if (!Array.isArray(_videos)) {
+                console.log(`getVideoLists error:`, holoChannelID);
+                console.log(_videos)
+                _videos = [];
+            }   // something is wrong
+
+            for (let video of _videos) {
+                let vID = video.id.videoId;
+
+                if (this.streamList.has(vID)) {
+                    // update liveBroadcastContent
+                    video.memberOnly = this.streamList.get(vID).memberOnly;
+                }
+
+                // cache video data
+                this.streamList.set(vID, video);
+            }
+        }
+
+
+        // ready to show search result
+        sleep(1000).then(() => {
+            mclog(`[MC] now time:`, new Date(Date.now()).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }));
+        });
+
+        // get REALLY video data
+        for (let [vID, video] of this.streamList) {
+
+            // get REALLY video data & liveStreamingDetails
+            let videoStatus = await this.youtube.getVideoStatus(vID);
+
+            // API error, quotaExceeded
+            if (!videoStatus.snippet) {
+                // video not found
+                if (videoStatus.code == 200) {
+                    // delete empty data video (search not found)
+                    if (this.streamList.has(vID)) { this.streamList.delete(vID); }
+                    continue;
+                }
+
+                // set fake ISO time string
+                let fakeTime = new Date(0);
+                if (video.snippet.liveBroadcastContent == 'upcoming') { fakeTime.setFullYear(2200); }
+                fakeTime = fakeTime.toISOString();
+
+                // set fake data object
+                videoStatus = {
+                    id: vID, snippet: video.snippet,
+                    liveStreamingDetails: {
+                        scheduledStartTime: fakeTime,
+                        activeLiveChatId: null
+                    }
+                };
+            }
+
+            // check result status AGAIN
+            let status = videoStatus.snippet.liveBroadcastContent;
+            let startTime = videoStatus.liveStreamingDetails.scheduledStartTime;
+
+            // show search result
+            sleep(1000).then(() => {
+                mclog(`[MC] stream at`,
+                    new Date(Date.parse(startTime)).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }),
+                    vID,
+                    status.padStart(8, ' '),
+                    videoStatus.snippet.title);
+            });
+
+            // update liveBroadcastContent
+            if (this.streamList.has(vID)) {
+                videoStatus.memberOnly = this.streamList.get(vID).memberOnly;
+            }
+            // cache video data
+            this.streamList.set(vID, videoStatus);
         }
     }
 
-    async coreInit() {
-        await sleep(5000);
 
-        // check table
-        if (!await this.pg.checkTable()) {
-            console.log(`init user_connections database!`);
-            await this.pg.creatTable();
-        }
-        if (!await this.pg.checkColumn()) {
-            console.log(`init column <${this.pg.expiresKey}>!`);
-            await this.pg.creatColumn();
+    // working video
+    cacheStreamID = null;
+    cacheStreamMemberOnly = () => { return this.streamList.get(this.cacheStreamID)?.memberOnly || false; }
+
+    interval = null;
+    // get stream chat by youtube api
+    async traceStreamChat({ vID, liveChatId, pageToken, loop = false }) {
+
+        // check liveChatId
+        if (!liveChatId) {
+            mclog(`[MC] traceStreamChat: ${vID}`);
+
+            if (!this.streamList.has(vID)) {
+                mclog(`[MC] Can't found video data`);
+                // return;
+
+                let videoStatus = await this.youtube.getVideoStatus(vID);
+                this.streamList.set(vID, videoStatus);
+            }
+
+            let video = this.streamList.get(vID);
+            liveChatId = video.liveStreamingDetails?.activeLiveChatId;
+            if (!liveChatId) {
+                mclog(`[MC] Can't found video liveChatId`);
+                return;
+            }
         }
 
-        // check expires user
+        // get chat data
+        let data = await this.youtube.getStreamChat(liveChatId, pageToken);
+
+        if (Array.isArray(data.items)) {
+            this.readStreamChatData(data);
+
+            // once for freechat
+            if (!loop) { return; }
+
+            // only trace 1 stream in same time
+            if (this.cacheStreamID != null && this.cacheStreamID != vID) { return; }
+            // set working video id
+            this.cacheStreamID = vID;
+
+            // next request
+            pageToken = data.nextPageToken;
+            let nextTime = data.pollingIntervalMillis;
+            let length = data.items.length;
+            if (length == 0) { nextTime *= 3; }
+            mclog(` -- ${length.toString().padStart(3, ' ')} messages returned -- ${nextTime} ${pageToken}`)
+
+            this.interval = setTimeout(arg => this.traceStreamChat(arg), nextTime, { vID, liveChatId, pageToken, loop });
+            return;
+
+        } else {
+            // got some error
+
+            if (data.reason == 'liveChatEnded') {
+                // liveChatEnded
+
+                // disable working video id
+                this.cacheStreamID = null;
+
+                // // force update video status to none
+                // this.streamList.get(vID).snippet.liveBroadcastContent = 'none';
+                // delete video data
+                this.streamList.delete(vID);
+
+                // finish catch loop
+                this.interval = null;
+                return;
+
+            } else if (data.reason == 'quotaExceeded') {
+                // quotaExceeded
+
+                // disable working video id
+                this.cacheStreamID = null;
+
+                // finish catch loop, 
+                // this.youtube.quotaExceeded[1] will block method startGetStreamChat()
+                this.interval = null;
+                return;
+
+            } else if (data.reason == 'forbidden' && data.message.includes('permissions')) {
+                // 'You do not have the necessary permissions to retrieve messages for the specified chat.'     // 2022/01/08
+                // 'You do not have the permissions required to retrieve messages for the specified live chat.' // 2022/08/18
+
+                // forbidden, member only stream
+
+                // disable working video id
+                this.cacheStreamID = null;
+
+                // get video & set member only flag
+                this.streamList.get(vID).memberOnly = true;
+
+                // finish catch loop, 
+                // memberOnly flag will block method startGetStreamChat()
+                this.interval = null;
+                return;
+
+            } else {
+                // API error, try again later
+                this.interval = setTimeout(this.traceStreamChat, 1000, { vID, liveChatId, pageToken, loop });
+                return;
+            }
+        }
+    }
+    async readStreamChatData(data = { items: [] }, force = false) {
+        if (!data.items || !(typeof data.items[Symbol.iterator] === 'function')) { data = { items: [] } }
+
+        for (let chatMessage of data.items) {
+            // check user is Chat Sponsor or not
+            // get user data
+            let auDetails = chatMessage.authorDetails;
+            // let auDetails = {
+            //     channelId: 'UCBcPAHz9RxwYkcpWs8XwkRw',
+            //     channelUrl: 'http://www.youtube.com/channel/UCBcPAHz9RxwYkcpWs8XwkRw',
+            //     displayName: 'Detron',
+            //     isChatModerator: false,
+            //     isChatOwner: false,
+            //     isChatSponsor: false,
+            //     isVerified: false,
+            //     profileImageUrl: 'https://yt3.ggpht.com/ytc/AGIKgqNMdgsY_f_3yAnQQgKqKVRnfEnuPaTfaAGwgItm4w=s88-c-k-c0x00ffffff-no-rj'
+            // }
+            let message = chatMessage.textMessageDetails?.messageText || '';
+            let superchat = chatMessage.superChatDetails?.amountDisplayString || '';
+
+            // callback
+            await mainMcCore.onLiveChat(this.holoChannelID, auDetails, message, superchat);
+        }
+    }
+
+    // === yt-dlp-wrap ===
+    ytDlpController = null;
+    livechatRawPool = new Map();
+    async traceStreamChatByYtdlp({ vID, memberOnly }) {
+
+        // only trace 1 stream in same time
+        if (this.cacheStreamID != null && this.cacheStreamID != vID) { return; }
+        // set working video id
+        this.cacheStreamID = vID;
+
+        if (!this.streamList.has(vID)) {
+            mclog(`[MC] Can't found video data`);
+            // return;
+
+            let videoStatus = await this.youtube.getVideoStatus(vID);
+            this.streamList.set(vID, videoStatus);
+        }
+
+        // Additionally you can set the options of the spawned process and abort the process.
+        // The abortion of the spawned process is handled by passing the signal of an AbortController.
+        this.ytDlpController = new AbortController();
+
+        // Init an instance with a given binary path.
+        // If none is provided "youtube-dl" will be used as command.
+        const ytDlpWrap = new YTDlpWrap();
+
+        // start stream
+        let command = [
+            `https://www.youtube.com/watch?v=${vID}`,
+            '--skip-download', '--restrict-filenames',
+            '--write-subs', '--sub-langs', 'live_chat',
+            // '--cookies', 'cookies.txt'
+        ];
+        if (memberOnly) { command.push('--cookies'); command.push('cookies.txt'); }
+
+        ytDlpWrap
+            .exec(command, { shell: true, detached: false }, this.ytDlpController.signal)
+            // .on('progress', (progress) => console.log(progress.percent, progress.totalSize, progress.currentSpeed, progress.eta))
+            .on('ytDlpEvent', async (eventType, eventData) => {
+                if (eventType != 'download' || !eventData.includes('frag')) {
+                    // console.log(`[${eventType}]`, eventData);
+                }
+
+                // download live chat data
+                if (eventType == 'download' && !eventData.includes('frag') &&
+                    /Destination:\s*([\S\s]+\.live_chat\.json)/.test(eventData)
+                ) {
+                    // get data json filename
+                    let [, filename] = eventData.match(/Destination:\s*([\S\s]+\.live_chat\.json)/);
+                    console.log(filename)
+
+                    if (!this.livechatRawPool.has(vID)) {
+                        this.livechatRawPool.set(vID, { filename, indexOfLine: 0 });
+                    }
+                }
+            })
+            .on('error', (error) => {
+                if (this.livechatRawPool.has(vID)) {
+                    this.livechatRawPool.delete(vID);
+                }
+                if (this.interval) { clearTimeout(this.interval); }
+
+                if (error.toString().includes('members-only')) {
+                    if (!memberOnly) {
+                        // retry with cookie
+                        this.traceStreamChatByYtdlp({ vID, memberOnly: true });
+                        // get video & set member only flag
+                        this.streamList.get(vID).memberOnly = true;
+                    }
+                } else {
+                    console.error(error);
+                }
+            })
+            .on('close', () => {
+                if (this.livechatRawPool.has(vID)) {
+                    this.livechatRawPool.delete(vID);
+                }
+                if (this.interval) { clearTimeout(this.interval); }
+                console.log(`ytDlpWrap all done`);
+            }); //*/
+
+        this.interval = setTimeout(() => this.readStreamChatFile(), 1000);
+
+
+        // get chat data
+    }
+    async readStreamChatFile() {
+
+        for (let [vID, livechatRaw] of this.livechatRawPool) {
+            let { filename, indexOfLine } = livechatRaw;
+
+            // check file exist
+            if (!fs.existsSync(`${filename}.part`)) { continue; }
+
+            // file read stream
+            let fileStream = fs.createReadStream(`${filename}.part`, 'utf8');
+            const rl = require('readline').createInterface({
+                input: fileStream,
+                crlfDelay: Infinity
+            });
+
+            let i = -1;
+            for await (const line of rl) {
+                ++i;
+                if (i < indexOfLine) { continue; }
+
+                // line to json
+                let chatItem;
+                try {
+                    ++livechatRaw.indexOfLine;
+                    chatItem = JSON.parse(line);
+                } catch (e) { continue; }
+
+                // get livechat object
+                // try {
+                // get main object
+                let actions = chatItem.replayChatItemAction.actions[0];
+                let item =
+                    actions.addChatItemAction?.item ||            // normal chat
+                    actions.addLiveChatTickerItemAction?.item ||  // super chat
+                    actions.addBannerToLiveChatCommand?.bannerRenderer.liveChatBannerRenderer.contents;     // banner
+
+                // check event type, pick normal chat
+                let renderer = item?.liveChatTextMessageRenderer || item?.liveChatPaidMessageRenderer;
+                // 'liveChatViewerEngagementMessageRendere', 'liveChatMembershipItemRenderer',
+                // 'liveChatTickerSponsorItemRenderer',      'liveChatPaidMessageRenderer',
+                // 'liveChatTickerPaidMessageItemRenderer',  'liveChatSponsorshipsGiftPurchaseAnnouncementRenderer',
+                // 'liveChatPaidStickerRendere',             'liveChatSponsorshipsGiftRedemptionAnnouncementRenderer'
+                if (!renderer) { continue; }
+
+
+                // set result
+                let auDetails = {
+                    channelId: renderer.authorExternalChannelId,
+                    channelUrl: `http://www.youtube.com/channel/${renderer.authorExternalChannelId}`,
+                    displayName: renderer.authorName.simpleText,
+                    isChatModerator: false, isChatOwner: false,
+                    isChatSponsor: false, isVerified: false,
+                    sponsorLevel: 0,
+                    profileImageUrl: ''
+                }
+                // user level
+                let authorBadges = renderer.authorBadges || [];
+                for (let badge of authorBadges) {
+                    let tooltip = badge?.liveChatAuthorBadgeRenderer.tooltip;
+
+                    if (tooltip.includes('ember')) {
+                        auDetails.isChatSponsor = true;
+                        switch (tooltip) {
+                            case 'New member': { auDetails.sponsorLevel = 1; } break;
+                            case 'Member (1 month)': { auDetails.sponsorLevel = 2; } break;
+                            case 'Member (2 months)': { auDetails.sponsorLevel = 3; } break;
+                            case 'Member (6 months)': { auDetails.sponsorLevel = 4; } break;
+                            case 'Member (1 year)': { auDetails.sponsorLevel = 5; } break;
+                            case 'Member (2 years)': { auDetails.sponsorLevel = 6; } break;
+                            default: {
+                                auDetails.sponsorLevel = -1;
+                                console.log(`[MC3] tooltip`, tooltip);
+                            } break;
+                        }
+                    }
+                    else if (tooltip == 'Verified') { auDetails.isVerified = true; }
+                    else if (tooltip == 'Moderator') { auDetails.isChatModerator = true; }
+                    else if (tooltip == 'Owner') { auDetails.isChatOwner = true; }
+                }
+                // user icon
+                let thumbnails = renderer.authorPhoto?.thumbnails || [];
+                for (let icon of thumbnails) {
+                    auDetails.profileImageUrl = icon.url;
+                }
+                // message
+                let runs = renderer.message?.runs || [];
+                let message = '';
+                for (let { text, emoji } of runs) {
+                    if (text) { message += text; }
+                    if (emoji) {
+                        if (emoji.shortcuts) { message += ` ${emoji.shortcuts.pop()} `; }
+                        else { message += emoji.image.accessibility.accessibilityData.label; }
+                    }
+                }
+                // SC
+                let superchat = renderer.purchaseAmountText?.simpleText || '';
+                // callback
+                await mainMcCore.onLiveChat(this.holoChannelID, auDetails, message, superchat);
+            }
+        }
+
+        this.interval = setTimeout(() => this.readStreamChatFile(), 500);
+    }
+
+    destroy() {
+        if (this.interval) { clearTimeout(this.interval); }
+        if (this.ytDlpController) { this.ytDlpController.abort(); }
+    }
+}
+
+class McGuildCore {
+    guildID = '';
+
+    holoChannelID = '';
+    expiresKey = '';
+
+    memberRoleID = '';
+    logChannelID = '';
+    streamChannelID = '';
+    memberChannelID = '';
+    constructor({ holoChannelID, expiresKey, memberRoleID, logChannelID, streamChannelID, memberChannelID }, { client, gID }) {
+        this.client = client;
+        this.guildID = gID;
+
+        this.holoChannelID = holoChannelID;
+        this.expiresKey = expiresKey;
+        this.memberRoleID = memberRoleID;
+        this.logChannelID = logChannelID;
+        this.streamChannelID = streamChannelID;
+        this.memberChannelID = memberChannelID;
+    };
+
+    guild = null;
+    memberRole = null;
+    async init() {
+
+        this.guild = await this.client.guilds.fetch(this.guildID);
+        this.memberRole = await this.guild.roles.fetch(this.memberRoleID);
+
+        let channel = await this.client.channels.fetch(this.logChannelID);
+        if (channel) {
+            this.dcPushEmbed = async (embed) => { return await channel.send({ embeds: [embed] }).catch(console.log); };
+        } else {
+            this.dcPushEmbed = (embed) => { console.log(embed.description || embed.data.description); };
+        }
+
         await this.checkExpiresUser();
     }
 
-    get301Url() {
-        let url = `${redirectUri}/member/${this.botID}/${this.expiresKey}`;
-        return url;
-    }
-    getAuthorizeUrl() {
-        let url = `https://discord.com/api/oauth2/authorize?`
-            + `client_id=${this.botID}&`
-            + `state=${this.botID}${this.expiresKey}&`
-            + `redirect_uri=${encodeURIComponent(redirectUri + "/callback")}&`
-            + `response_type=code&`
-            + `scope=identify%20connections`;
-        return url;
-    }
+    client = null;
+    dcPushEmbed = async () => { };
 
-
-    // main logic
     // check user role / membership expires
     async checkExpiresUser() {
         mclog('core.checkExpiresUser');
-        let data = [];
-
-        // => del user role/del db data
-        // sync run
-        data = await this.pg.listExpiresUserID();
-        mclog(`core.pg.listExpiresUserID`);
+        let pgData = [];
 
         // get discord users cache
         await this.guild.members.fetch({ force: true }).catch(console.log);
-        // get expires user
-        for (let _user of data) {
-            let dID = _user.discord_id;
+
+        pgData = (await Pg.listUserData())?.rows || [];
+        mclog(`Pg.listUserData`);
+        for (let pgUser of pgData) {
+            // pgUser = { discord_id: '244255110572670987', youtube_id: 'UCgUpDIQ7Cq4kJETqZhGk7Kg', ssrb_expires: '0', kzmi_expires: '0' }
+
+            let dID = pgUser.discord_id;
+            let userExpires = pgUser[this.expiresKey];
+            if (userExpires == 0) { continue; }
 
             // get user data in guild
-            let user = this.guild.members.cache.get(dID);
-            if (!user) {
-                mclog(`User <@${dID}> not in guild <${this.guild}>`);
-                continue;
-            }
-
-            // check user level
-            let isSpecalUser = user.roles.cache.has(this.memberRole.id);
-
-            // set user role
-            if (isSpecalUser) {
-                mclog(`found dc user, Disable role! : ${dID}`);
-                this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Red).setDescription(`認證過期, 刪除身分組(${this.memberRole}): ${user.user.tag} ${user.toString()}`));
-                this.pg.updateExpires(dID, 0);
-                user.roles.remove(this.memberRole).catch(console.log);
-            } else {
-                mclog(`found dc user, Delete apply! : ${dID}`);
-                this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Orange).setDescription(`申請過期, 清除申請: ${user.user.tag} ${user.toString()}`));
-                this.pg.updateExpires(dID, 0);
-            }
-        }
-
-
-        // set role again
-        data = await this.pg.listUserData();
-        mclog(`core.pg.listUserData`);
-
-        // get users
-        for (let _user of data) {
-            let dID = _user.discord_id;
-            let expires = _user[this.expiresKey];
-            if (expires == 0) { continue; }
-
-            // get user data in guild
-            let user = this.guild.members.cache.get(dID);
-            if (!user) {
+            let dcUser = this.guild.members.cache.get(dID);
+            if (!dcUser) {
                 // mclog(`User <@${dID}> not in guild <${this.guild}>`);
                 continue;
             }
 
             // check user level
-            let isSpecalUser = user.roles.cache.has(this.memberRole.id);
+            const isSpecalUser = dcUser.roles.cache.has(this.memberRole.id);
+            const isExpiredUser = (userExpires <= Date.now());
 
-            // set user role
-            if (isSpecalUser) {
-                // mclog(`found dc user with member role! : ${dID}`);
-            } else if (expires > Date.now() + memberTemp) {
-                mclog(`found dc user, add role! : ${dID}`);
-                this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Blue).setDescription(`確認期限, 恢復身分組(${this.memberRole}): ${user.user.tag} ${user.toString()}`));
-                user.roles.add(this.memberRole).catch(console.log);
+            if (isExpiredUser) {
+                Pg.updateExpires(dID, this.expiresKey, 0);
+
+                if (isSpecalUser) {
+                    mclog(`User <@${dID}> expired, Remove role!`);
+                    this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Red).setDescription(`認證過期, 刪除身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
+                    dcUser.roles.remove(this.memberRole).catch(console.log);
+                }
+                // else { mclog(`User <@${dcUser.user.tag}> in guild without role <${this.memberRole.name}>.`); }
+            } else {
+                if (!isSpecalUser) {
+                    mclog(`User <@${dID}> without role, Add role!`);
+                    this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Blue).setDescription(`確認期限, 恢復身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
+                    dcUser.roles.add(this.memberRole).catch(console.log);
+                }
+                // else { mclog(`User <@${dcUser.user.tag}> in guild with role <${this.memberRole.name}>.`); }
             }
         }
     }
-    // get streams list
-    async cacheStreamLists() {
-        mclog('core.cacheStreamLists');
-        // // clear cache
-        // this.cacheStreamList = {};
 
-        // // search videos in last day
-        // let date = (new Date(Date.now() - 1000 * 60 * 60 * 24)).setHours(3, 0, 0, 0);   // last day 03:00
-        // let lives = await this.youtube.getVideoSearch({ order: 'date', publishedAfter: date.toISOString() });
+    // let auDetails = {
+    //     channelId: renderer.authorExternalChannelId,
+    //     channelUrl: `http://www.youtube.com/channel/${renderer.authorExternalChannelId}`,
+    //     displayName: renderer.authorName.simpleText,
+    //     isChatModerator: false, isChatOwner: false,
+    //     isChatSponsor: false, isVerified: false,
+    //     sponsorLevel: 0,
+    //     profileImageUrl: ''
+    // }
 
-        // search videos in last day
-        let videos = await this.youtube.getVideoSearch({ eventType: "live" });
-        let upcoming = await this.youtube.getVideoSearch({ eventType: "upcoming" })
-        for (let newVideo of upcoming) {
-            if (!videos.find((video) => video.id.videoId == newVideo.id.videoId)) {
-                videos.push(newVideo);
+    mamberCache = new Map();
+
+    async onLiveChat(gID, auDetails, message, superchat) {
+
+        let youtubeID = auDetails.channelId;
+        let result = await Pg.getDataByYoutubeID(youtubeID);
+
+        let pgUser = ((result)?.rows || [null])[0];
+        if (!pgUser) {
+            // mclog(`User not in database: ${auDetails.displayName}`);
+            return;
+        }
+
+        let dID = pgUser.discord_id;
+        let dcUser = this.guild.members.cache.get(dID);
+        if (!dcUser) {
+            // mclog(`User <@${dID}> not in guild <${this.guild}>`);
+            return;
+        }
+
+        // check user level
+        let isSpecalUser = dcUser.roles.cache.has(this.memberRole.id);
+        let isChatSponsor = (auDetails.isChatSponsor || auDetails.isChatOwner || auDetails.isChatModerator);
+
+        if (this.mamberCache.has(youtubeID)) {
+            // skip if sponsor statu didnt change
+            if (this.mamberCache.get(youtubeID) == isChatSponsor) {
+                return;
+            }
+
+            // sponsor statu changed, set user role again
+        } else {
+            // set sponsor statu flag to cache space
+            this.mamberCache.set(youtubeID, isChatSponsor);
+        }
+
+        // set user role
+        if (isChatSponsor) {
+            await Pg.updateExpires(dID, this.expiresKey);
+
+            if (isSpecalUser) {
+                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Update Expires <${this.expiresKey}>!`);
+                await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Aqua).setDescription(`認證成功, 延展期限: ${dcUser.user.tag} ${dcUser.toString()}`));
+            }
+            if (!isSpecalUser) {
+                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Add Role!`);
+                await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Blue).setDescription(`認證成功, 新增身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
+                dcUser.roles.add(this.memberRole).catch(console.error);
             }
         }
+        if (!isChatSponsor) {
+            if (pgUser[this.expiresKey] != 0) { Pg.updateExpires(dID, this.expiresKey, 0); }
 
-        // ready to show search result
-        sleep(1000).then(() => {
-            mclog(`now time:`, new Date(Date.now()).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }));
-        });
-        // check search result
-        for (let video of videos) {
-            // get vID
-            let vID = video.id.videoId;
-            // video in cache
-            if (this.cacheStreamList.has(vID)) { continue; }
-
-            // get REALLY video data
-            let videoStatus = await this.getVideoStatus(vID);
-            if (videoStatus == null) { break; } // API fail
-
-            // check result status AGAIN
-            let status = videoStatus.snippet.liveBroadcastContent;
-            let startTime = videoStatus.liveStreamingDetails.scheduledStartTime;
-            // show result
-            sleep(1000).then(() => {
-                mclog(`stream at`, new Date(Date.parse(startTime)).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }), vID, status.padStart(8, ' '), videoStatus.snippet.title);
-            });
-
-            if (!['upcoming', 'live'].includes(status)) { continue; }
-            this.cacheStreamList.set(vID, new streamVideo({ video: videoStatus, status: 'waiting' }));
+            if (isSpecalUser) {
+                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Remove role!`);
+                await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Red).setDescription(`非會員, 刪除身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
+                dcUser.roles.remove(this.memberRole).catch(console.log);
+            }
+            // if (!isSpecalUser) {
+            //     mclog(`User <${auDetails.displayName}> in guild <${this.guild}>.`);
+            //     this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Orange).setDescription(`${pgUser[this.expiresKey] > 0 ? '申請無效, 清除申請' : '申請無效'}: ${dcUser.user.tag} ${dcUser.toString()}`));
+            // }
         }
+
+        // console.log(
+        //     `[Livechat ${this.holoChannelID}]`,
+        //     (auDetails.isChatModerator ? '🔧' : '　'), (auDetails.isChatOwner ? '⭐' : '　'), (auDetails.isVerified ? '✔️' : '　'), (auDetails.isChatSponsor ? '🤝' : '　'),
+        //     // (auDetails.isChatModerator ? 'T' : '_'), (auDetails.isChatOwner ? 'O' : '_'), (auDetails.isVerified ? 'V' : '_'), (auDetails.isChatSponsor ? 'S' : '_'),
+        //     `<${auDetails.displayName}>`,
+        //     superchat,
+        //     message,
+        //     (auDetails.profileImageUrl ? '' : '[-] Photo'),
+        //     (auDetails.channelId ? '' : '[-] cID')
+        // );
+
     }
 
     // command
-    async cmdExpiredUser() {
-        // get expires data
-        let data = await this.pg.listUserData();
-        let expiresKey = this.expiresKey;
-        let response = [];
+    get301Url() {
+        return `${redirectUri}/member/${this.client.user.id}/${this.expiresKey}`;
+    }
+    getAuthorizeUrl() {
+        let url = `https://discord.com/api/oauth2/authorize?`
+            + `client_id=${this.client.user.id}&`
+            + `state=${this.client.user.id}${this.expiresKey}&`
+            + `redirect_uri=${encodeURIComponent(redirectUri + "/callback")}&`
+            + `response_type=code&`
+            + `scope=identify%20connections`;
+        return url;
+    }
+    // cmdStreamList() {
+    //     let streamList = [];
 
-        // sort
-        data.sort((a, b) => a[expiresKey] == b[expiresKey] ? 0 : (a[expiresKey] > b[expiresKey] ? 1 : -1));
-        // set log
-        for (let user of data) {
-            let { discord_id, youtube_id } = user;
-            let expires = parseInt(user[expiresKey]);
-            if (expires == 0) { continue; }
+    //     for (let vID of this.cacheStreamList.keys()) {
+    //         // get cache
+    //         let video = this.cacheStreamList.get(vID).video;
+    //         mclog(`[MC] ${vID} ${video ? 'Object' : video}`);
+    //         if (!video) { continue; }
 
-            let t = (expires - Date.now()) / (1000 * 60 * 60);
-            let timeLeft = `${parseInt(t / 24).toString().padStart(3, ' ')}days ${parseInt(t % 24).toString().padStart(2, ' ')}hours`;
-            let dateLimit = new Date(expires).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }).padStart(23, ' ');
+    //         // get video data
+    //         let description = video ? video.snippet.title : vID;
+    //         streamList.push(`[${description}](http://youtu.be/${vID})`);
+    //     }
 
-            mclog(discord_id, youtube_id, timeLeft, dateLimit, expires);
-            if (t < (memberTemp / (1000 * 60 * 60))) {
-                response.push(`<@${discord_id}> ${youtube_id}\n${timeLeft} ${dateLimit}`);
+    //     return ['直播台:'].concat(streamList);
+    // }
+}
+
+class MainMemberCheckerCore {
+
+    constructor() { };
+    initialization = 0;
+
+    async init() {
+        if (this.initialization != 0) {
+            while (this.initialization != 2) {
+                await sleep(500);
             }
         }
+        this.initialization = 1;
 
-        return response;
+        // Download the youtube-dl binary for the given version and platform to the provided path.
+        // By default the latest version will be downloaded to "./youtube-dl" and platform = os.platform().
+        // await YoutubeDlWrap.downloadFromGithub('youtube-dl', '2023.03.04.1', '');
+        await YTDlpWrap.downloadFromGithub(`yt-dlp.exe`).catch(() => { });
+
+        await Pg.init();
+
+        this.initialization = 2;
     }
-    cmdStreamList() {
-        let streamList = [];
 
-        for (let vID of this.cacheStreamList.keys()) {
-            // get cache
-            let video = this.cacheStreamList.get(vID).video;
-            mclog(`[MC] ${vID} ${video ? 'Object' : video}`);
-            if (!video) { continue; }
+    // t = 0;
+    // c = 0;
+    async onLiveChat(holoChannelID, auDetails, message, superchat) {
+        // console.log(
+        //     `[Livechat ${holoChannelID}]`,
+        //     (auDetails.isChatModerator ? '🔧' : '　'), (auDetails.isChatOwner ? '⭐' : '　'), (auDetails.isVerified ? '✔️' : '　'), (auDetails.isChatSponsor ? '🤝' : '　'),
+        //     // (auDetails.isChatModerator ? 'T' : '_'), (auDetails.isChatOwner ? 'O' : '_'), (auDetails.isVerified ? 'V' : '_'), (auDetails.isChatSponsor ? 'S' : '_'),
+        //     `<${auDetails.displayName}>`,
+        //     superchat,
+        //     message,
+        //     (auDetails.profileImageUrl ? '' : '[-] Photo'),
+        //     (auDetails.channelId ? '' : '[-] cID')
+        // );
 
-            // get video data
-            let description = video ? video.snippet.title : vID;
-            streamList.push(`[${description}](http://youtu.be/${vID})`);
+        // get guild core
+        for (let gCore of this.guildCores) {
+            if (gCore.holoChannelID != holoChannelID) { continue; }
+
+            // check guild role by livechat
+            await gCore.onLiveChat(gCore.guildID, auDetails, message, superchat)
+
+            // timer
+            // if (this.c % 1000 == 0) {
+            //     console.log(Date.now() - this.t, 'ms')
+            //     this.t = Date.now();
+            // }
+            // ++this.c;
+
+
+            // yt livechat to discord message
+            let yCore = this.ytChannelCores.get(holoChannelID);
+            // check target channel
+            let isMemberOnly = yCore.cacheStreamMemberOnly();
+            // get channel from config ID
+            // gCore.sendMessage();
+        }
+    }
+
+    // MemberCheckerCore by channel
+    // 2 apikey for 1 channel
+    ytChannelCores = new Map();
+    async addYoutubeChannel(config) {
+        if (!config.holoChannelID) { return; }
+        if (this.ytChannelCores.has(config.holoChannelID)) { return; }
+
+        let newCore = new McChannelCore(config, async (holoChannelID, auDetails, message, superchat) => await this.onLiveChat(holoChannelID, auDetails, message, superchat));
+        this.ytChannelCores.set(config.holoChannelID, newCore);
+
+        if (!config.expiresKey) { return; }
+        await Pg.initColumn(config.expiresKey);
+    }
+    guildCores = [];
+    async addGuild(config, { client, gID }) {
+        let newCore = new McGuildCore(config, { client, gID });
+        await newCore.init();
+        this.guildCores.push(newCore);
+    }
+
+    // get stream (live/upcoming) videos
+    async getVideoLists() {
+        // get api object
+        for (let [holoChannelID, core] of this.ytChannelCores) {
+            await core.getVideoList();
+        }
+    }
+
+
+
+    async clockMethod(client, { hours, minutes, seconds }) {
+
+        // check stream task list at XX:03:00
+        if (![3, 4, 5, 7, 9, 11].includes(hours) &&
+            minutes == 3 && seconds == 0) {
+            this.getVideoLists();
         }
 
-        return ['直播台:'].concat(streamList);
+
+
+
+
+
+
+
+
+
+        // check channel name
+        // gCore.changeChannelName();
+    }
+
+    destroy() {
+        for (let [holoChannelID, core] of this.ytChannelCores) {
+            core.destroy();
+        }
     }
 }
+let mainMcCore = new MainMemberCheckerCore();
 
 
 
@@ -614,118 +1227,138 @@ module.exports = {
     name: 'member checker',
     description: "check who is SSRB",
 
-    async execute(message, pluginConfig, command, args, lines) {
+    // async execute(message, pluginConfig, command, args, lines) {
 
-        if (!command) { return false; }
+    //     if (!command) { return false; }
 
-        const { client, channel } = message;
+    //     const { client, channel } = message;
 
-        // check core
-        let cores = coreArray.filter((core) => { return (core.botID == client.user.id && core.guild.id == message.guild.id); });
-        if (cores.length <= 0) { return false; }
+    //     // check core
+    //     let cores = coreArray.filter((core) => { return (core.botID == client.user.id && core.guild.id == message.guild.id); });
+    //     if (cores.length <= 0) { return false; }
 
-        for (let core of cores) {
-            const isLogChannel = (channel.id == core.logChannelID);
+    //     for (let core of cores) {
+    //         const isLogChannel = (channel.id == core.logChannelID);
 
-            if (isLogChannel && command == 'mcdebug') {
-                mclog = (mclog == console.log) ?
-                    (() => { }) : console.log;
-                continue;
-            }
-            if (isLogChannel && command == 'user') {
-                let dID = args[0];
-                if (!dID) {
-                    channel.send({ content: `!user <user discord ID>` });
-                    continue;
-                }
+    //         if (isLogChannel && command == 'mcdebug') {
+    //             mclog = (mclog == console.log) ?
+    //                 (() => { }) : console.log;
+    //             continue;
+    //         }
+    //         if (isLogChannel && command == 'user') {
+    //             let dID = args[0];
+    //             if (!dID) {
+    //                 channel.send({ content: `!user <user discord ID>` });
+    //                 continue;
+    //             }
 
-                let data = await core.pg.getDataByDiscordID(dID.trim());
-                console.log(data)
+    //             let data = await core.pg.getDataByDiscordID(dID.trim());
+    //             console.log(data)
 
-                channel.send({ content: `${dID}\n${JSON.stringify(data, null, 2)}` });
-                continue;
-            }
-            if (isLogChannel && command == 'database') {
-                // get response
-                let response = await core.cmdExpiredUser();
+    //             channel.send({ content: `${dID}\n${JSON.stringify(data, null, 2)}` });
+    //             continue;
+    //         }
+    //         if (isLogChannel && command == 'database') {
+    //             // get response
+    //             let response = await core.cmdExpiredUser();
 
-                // log to console
-                for (let res of response) { console.log(res); }
+    //             // log to console
+    //             for (let res of response) { console.log(res); }
 
-                // log to channel
-                if (response.length > 0) {
-                    let embeds = [new EmbedBuilder().setDescription(response.join('\n'))];
-                    channel.send({ embeds });
-                }
-                continue;
-            }
-            if (command == 'member') {
-                channel.send({ content: core.get301Url() });
-                continue;
-            }
-            if (command == 'stream') {
-                // force update all stream list cache by admin
+    //             // log to channel
+    //             if (response.length > 0) {
+    //                 let embeds = [new EmbedBuilder().setDescription(response.join('\n'))];
+    //                 channel.send({ embeds });
+    //             }
+    //             continue;
+    //         }
+    //         if (command == 'member') {
+    //             channel.send({ content: core.get301Url() });
+    //             continue;
+    //         }
+    //         if (command == 'stream') {
+    //             // force update all stream list cache by admin
 
-                if (regUrl.test(args[0])) {
-                    // get vID
-                    const [, , , , , vID] = args[0].match(regUrl);
+    //             if (regUrl.test(args[0])) {
+    //                 // get vID
+    //                 const [, , , , , vID] = args[0].match(regUrl);
 
-                    // get video data from API
-                    let video = await core.youtube.getVideoStatus(vID)
-                    // update cache data
-                    if (video && video.snippet && video.snippet.channelId == core.youtube.holoChannelID) {
-                        core.cacheStreamList[vID] = video;
-                        core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`手動新增直播清單`));
-                    }
-                } else if (isLogChannel) {
-                    await core.cacheStreamLists();
-                    core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`更新直播清單`));
-                }
+    //                 // get video data from API
+    //                 let video = await core.youtube.getVideoStatus(vID)
+    //                 // update cache data
+    //                 if (video && video.snippet && video.snippet.channelId == core.youtube.holoChannelID) {
+    //                     core.cacheStreamList[vID] = video;
+    //                     core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`手動新增直播清單`));
+    //                 }
+    //             } else if (isLogChannel) {
+    //                 await core.cacheStreamLists();
+    //                 core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`更新直播清單`));
+    //             }
 
-                // get response
-                let streamList = core.cmdStreamList();
+    //             // get response
+    //             let streamList = core.cmdStreamList();
 
-                let embed = new EmbedBuilder().setColor(Colors.DarkGold);
-                if (streamList.length <= 0) { embed.setDescription(`目前沒有直播台/待機台`); }
-                else { embed.setDescription(streamList.join('\n')); }
-                channel.send({ embeds: [embed] });
+    //             let embed = new EmbedBuilder().setColor(Colors.DarkGold);
+    //             if (streamList.length <= 0) { embed.setDescription(`目前沒有直播台/待機台`); }
+    //             else { embed.setDescription(streamList.join('\n')); }
+    //             channel.send({ embeds: [embed] });
 
-                continue;
-            }
-        }
+    //             continue;
+    //         }
+    //     }
 
-        return true;
-    },
+    //     return true;
+    // },
 
     async setup(client) {
-        // get guild list if bot working space
+
         for (let gID of client.guildConfigs.keys()) {
 
-            const pluginConfig = client.getPluginConfig(gID, `memberChecker3`);
+            const pluginConfig = client.getPluginConfig(gID, 'memberChecker3');
             if (!pluginConfig) { continue; }
 
-            // get config list for guild with gID
-            for (let mcConfig of pluginConfig) {
+            await mainMcCore.init();
 
-                // get guild object
-                const guild = client.guilds.cache.get(gID);
-                if (!guild) { continue; }    // bot not in guild
-                if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) { console.log(`Missing Permissions: MANAGE_ROLES in <${gID}>`); continue; }
-                if (!guild.members.me.permissions.has(PermissionFlagsBits.SendMessages)) { console.log(`Missing Permissions: SEND_MESSAGES in <${gID}>`); continue; }
-
-                // check role
-                const role = guild.roles.cache.get(mcConfig.memberRoleID);
-                if (!role) { console.log(`Missing Role: <@&${mcConfig.memberRoleID}> in <${gID}>`); continue; }    // cant found role
-
-                let newCore = new memberCheckerCore(client, mcConfig, guild, role);
-                newCore.coreInit();
-                coreArray.push(newCore);
+            for (let config of pluginConfig) {
+                await mainMcCore.addYoutubeChannel(config);
+                await mainMcCore.addGuild(config, { client, gID });
             }
+            // await sleep(1000)
+            // mainMcCore.ytChannelCores.get(`UCUKD-uaobj9jiqB-VXt71mA`).traceStreamChatByYtdlp({ vID: 'Vx1K89idggs' });
         }
+    }
 
-    },
+    // async setup(client) {
+    //     // get guild list if bot working space
+    //     for (let gID of client.guildConfigs.keys()) {
 
-    clockMethod(client, { hours, minutes, seconds }) { }
+    //         const pluginConfig = client.getPluginConfig(gID, `memberChecker3`);
+    //         if (!pluginConfig) { continue; }
+
+    //         // get config list for guild with gID
+    //         for (let mcConfig of pluginConfig) {
+
+    //             // get guild object
+    //             const guild = client.guilds.cache.get(gID);
+    //             if (!guild) { continue; }    // bot not in guild
+    //             if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) { console.log(`Missing Permissions: MANAGE_ROLES in <${gID}>`); continue; }
+    //             if (!guild.members.me.permissions.has(PermissionFlagsBits.SendMessages)) { console.log(`Missing Permissions: SEND_MESSAGES in <${gID}>`); continue; }
+
+    //             // check role
+    //             const role = guild.roles.cache.get(mcConfig.memberRoleID);
+    //             if (!role) { console.log(`Missing Role: <@&${mcConfig.memberRoleID}> in <${gID}>`); continue; }    // cant found role
+
+    //             let newCore = new memberCheckerCore(client, mcConfig, guild, role);
+    //             await newCore.coreInit();
+    //             coreArray.push(newCore);
+    //         }
+    //     }
+
+    // },
+
+    // clockMethod(client, { hours, minutes, seconds }) {
+
+    // }
 }
 
 
@@ -740,134 +1373,134 @@ module.exports = {
 
 
 
-// express
-const app = require('../server.js').app;
-app.all(`/member/:botid/:ekey`, async (req, res) => {
-    let botID = req.params.botid;
-    let expiresKey = req.params.ekey;
+// // express
+// const app = require('../server.js').app;
+// app.all(`/member/:botid/:ekey`, async (req, res) => {
+//     let botID = req.params.botid;
+//     let expiresKey = req.params.ekey;
 
-    // get core form botid
-    let core = coreArray.find((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
-    if (!core) {
-        res.send(`不明的參數組! 請聯絡管理員或製作者\n${botID}, ${expiresKey}`);
-        return;
-    }
+//     // get core form botid
+//     let core = coreArray.find((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
+//     if (!core) {
+//         res.send(`不明的參數組! 請聯絡管理員或製作者\n${botID}, ${expiresKey}`);
+//         return;
+//     }
 
-    res.redirect(301, core.getAuthorizeUrl());
-    return;
-});
-app.all('/callback', async (req, res) => {
-    const param = req.query.state || '';
-    const [, botID, expiresKey] = (param.match(/^(\d{17,19})(\S{12})$/) || [, 'null', 'null']);
+//     res.redirect(301, core.getAuthorizeUrl());
+//     return;
+// });
+// app.all('/callback', async (req, res) => {
+//     const param = req.query.state || '';
+//     const [, botID, expiresKey] = (param.match(/^(\d{17,19})(\S{12})$/) || [, 'null', 'null']);
 
-    let cores = coreArray.filter((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
-    if (cores.length <= 0) {
-        res.status(404).send(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
-        console.log(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
-        return;
-    }
+//     let cores = coreArray.filter((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
+//     if (cores.length <= 0) {
+//         res.status(404).send(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
+//         console.log(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
+//         return;
+//     }
 
-    let core = cores[0];
-    try {
-        let headers = { "Content-Type": "application/x-www-form-urlencoded" };
-        let body = `client_id=${core.botID}`
-        body += `&client_secret=${core.clientSecret}`
-        body += '&grant_type=authorization_code'
-        body += `&code=${req.query.code}`
-        body += `&redirect_uri=${redirectUri}/callback`
-        body += '&scope=connections'
-        // get oauth2 token
-        let tokenResponse = await post({ url: `${API_ENDPOINT}/oauth2/token`, headers, body, json: true })
-        let { access_token } = tokenResponse.body;
-        // response.body = {
-        //     access_token: '------------------------------', expires_in: 604800,
-        //     refresh_token: '------------------------------', scope: 'connections', token_type: 'Bearer'
-        // }
+//     let core = cores[0];
+//     try {
+//         let headers = { "Content-Type": "application/x-www-form-urlencoded" };
+//         let body = `client_id=${core.botID}`
+//         body += `&client_secret=${core.clientSecret}`
+//         body += '&grant_type=authorization_code'
+//         body += `&code=${req.query.code}`
+//         body += `&redirect_uri=${redirectUri}/callback`
+//         body += '&scope=connections'
+//         // get oauth2 token
+//         let tokenResponse = await post({ url: `${API_ENDPOINT}/oauth2/token`, headers, body, json: true })
+//         let { access_token } = tokenResponse.body;
+//         // response.body = {
+//         //     access_token: '------------------------------', expires_in: 604800,
+//         //     refresh_token: '------------------------------', scope: 'connections', token_type: 'Bearer'
+//         // }
 
-        // get user connections
-        headers = { Authorization: "Bearer " + access_token }
-        let identify = await get({ url: `${API_ENDPOINT}/users/@me`, headers, json: true })
-        let connections = await get({ url: `${API_ENDPOINT}/users/@me/connections`, headers, json: true })
-        // get user data
-        let cID = null;         // YT channel ID
-        let dID = null;         // Discord user ID
-        let username = null;    // Discord user name
-        let tag = null;         // Discord user tag number
+//         // get user connections
+//         headers = { Authorization: "Bearer " + access_token }
+//         let identify = await get({ url: `${API_ENDPOINT}/users/@me`, headers, json: true })
+//         let connections = await get({ url: `${API_ENDPOINT}/users/@me/connections`, headers, json: true })
+//         // get user data
+//         let cID = null;         // YT channel ID
+//         let dID = null;         // Discord user ID
+//         let username = null;    // Discord user name
+//         let tag = null;         // Discord user tag number
 
-        if (identify.body) {
-            dID = identify.body.id;
-            username = identify.body.username;
-            tag = identify.body.discriminator;
-        }
+//         if (identify.body) {
+//             dID = identify.body.id;
+//             username = identify.body.username;
+//             tag = identify.body.discriminator;
+//         }
 
-        // get discord user connections data
-        if (connections.body && Array.isArray(connections.body)) {
-            for (let connect of connections.body) {
-                if (connect.type != 'youtube') { continue; }
-                cID = connect.id;
-                break;
-            }
-        }
+//         // get discord user connections data
+//         if (connections.body && Array.isArray(connections.body)) {
+//             for (let connect of connections.body) {
+//                 if (connect.type != 'youtube') { continue; }
+//                 cID = connect.id;
+//                 break;
+//             }
+//         }
 
-        // didn't found youtube cID
-        if (cID == null) {
-            let html = [
-                `User: ${username}`,
-                `Youtube channel: ERROR! Can't found connect data!`,
-                `               : 錯誤! 找不到帳號連結資訊!`
-            ].join('<br>')
+//         // didn't found youtube cID
+//         if (cID == null) {
+//             let html = [
+//                 `User: ${username}`,
+//                 `Youtube channel: ERROR! Can't found connect data!`,
+//                 `               : 錯誤! 找不到帳號連結資訊!`
+//             ].join('<br>')
 
-            res.send(html);
-            return;
-        }
+//             res.send(html);
+//             return;
+//         }
 
-        // insert data
-        if (await core.pg.insertData(dID, cID) == null) {
-            let html = [
-                `User: ${username}`,
-                `Database channel: ERROR! PG insert data error!`,
-                `                : 資料庫錯誤! ${dID}, ${cID}`
-            ].join('<br>')
+//         // insert data
+//         if (await core.pg.insertData(dID, cID) == null) {
+//             let html = [
+//                 `User: ${username}`,
+//                 `Database channel: ERROR! PG insert data error!`,
+//                 `                : 資料庫錯誤! ${dID}, ${cID}`
+//             ].join('<br>')
 
-            res.send(html);
-            return;
-        }
+//             res.send(html);
+//             return;
+//         }
 
-        // get result
-        let userData = await core.pg.getDataByDiscordID(dID);
-        let html = [
-            `User: ${username}`,
-            `Youtube channel: https://www.youtube.com/channel/${cID}`,
-            `expires in time: ${new Date(parseInt(userData[core.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' })}`
-        ].join('<br>')
+//         // get result
+//         let userData = await core.pg.getDataByDiscordID(dID);
+//         let html = [
+//             `User: ${username}`,
+//             `Youtube channel: https://www.youtube.com/channel/${cID}`,
+//             `expires in time: ${new Date(parseInt(userData[core.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' })}`
+//         ].join('<br>')
 
-        res.send(html);
+//         res.send(html);
 
-        for (core of cores) {
-            // log
-            core.dcPushEmbed(new EmbedBuilder().setColor(Colors.Green).setDescription(`申請完成: ${username}@${tag} <@${dID}>`));
+//         for (core of cores) {
+//             // log
+//             core.dcPushEmbed(new EmbedBuilder().setColor(Colors.Green).setDescription(`申請完成: ${username}@${tag} <@${dID}>`));
 
-            // delete this user's data from cache if on stream
-            if (core.cacheMemberList.includes(cID)) { core.cacheMemberList = core.cacheMemberList.filter((e) => e != cID); }
-        }
-        return;
-    } catch (e) {
-        console.log(e)
-        res.send(e.message);
-        return;
-    }
+//             // delete this user's data from cache if on stream
+//             if (core.cacheMemberList.includes(cID)) { core.cacheMemberList = core.cacheMemberList.filter((e) => e != cID); }
+//         }
+//         return;
+//     } catch (e) {
+//         console.log(e)
+//         res.send(e.message);
+//         return;
+//     }
 
-    // {
-    //     identify.body = {
-    //         accent_color: null, avatar: '0b69434e070a29d575737ed159a29224',
-    //         banner: null, banner_color: null, discriminator: '8676', flags: 0,
-    //         id: '353625493876113440', locale: 'zh-TW', mfa_enabled: true,
-    //         public_flags: 0, username: 'K.T.710'
-    //     }
+//     // {
+//     //     identify.body = {
+//     //         accent_color: null, avatar: '0b69434e070a29d575737ed159a29224',
+//     //         banner: null, banner_color: null, discriminator: '8676', flags: 0,
+//     //         id: '353625493876113440', locale: 'zh-TW', mfa_enabled: true,
+//     //         public_flags: 0, username: 'K.T.710'
+//     //     }
 
-    //     connections.body[0] = {
-    //         friend_sync: false, id: 'UC-JsTXzopVL28gQXEUV276w', name: 'K.T.',
-    //         show_activity: true, type: 'youtube', verified: true, visibility: 1
-    //     }
-    // }
-});
+//     //     connections.body[0] = {
+//     //         friend_sync: false, id: 'UC-JsTXzopVL28gQXEUV276w', name: 'K.T.',
+//     //         show_activity: true, type: 'youtube', verified: true, visibility: 1
+//     //     }
+//     // }
+// });

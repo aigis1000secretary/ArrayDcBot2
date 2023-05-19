@@ -11,7 +11,6 @@ module.exports = {      // KTG
             logChannelID: '713623232070156309',      // #_log
             streamChannelID: '1008565763260551188',      // #⚫_stream
             memberChannelID: '1010005672152281218',      // #⚫_member
-            startTagChannelID: null,
             // apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7],   // SSRB
             // apiKey: [process.env.YOUTUBE_APIKEY_8, process.env.YOUTUBE_APIKEY_9],   // KZMI
             apiKey: [process.env.YOUTUBE_APIKEY_A, process.env.YOUTUBE_APIKEY_B],   // TEST

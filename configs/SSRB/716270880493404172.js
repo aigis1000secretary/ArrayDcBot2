@@ -16,7 +16,6 @@ module.exports = {      // SSRB的聚集地
     //         logChannelID: '904053455377825833',      // #會限認證紀錄
     //         streamChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
     //         memberChannelID: '790236195794976808',  // #獅白會限直播討論用
-    //         startTagChannelID: '775100135515750470',      // #🌿獅白直播-streamchat
     //         apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7]    // SSRB
     //     }
     // ],
