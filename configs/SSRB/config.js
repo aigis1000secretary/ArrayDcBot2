@@ -8,7 +8,8 @@ module.exports = {
     resonance: 'ぼた',
     debugPlugins: [
         `ping`,
-        'uptimer'
+        'uptimer',
+        'memberChecker3',
     ],
 
     debugChannelID: '826992877925171250',

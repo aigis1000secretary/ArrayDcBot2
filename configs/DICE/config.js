@@ -15,7 +15,7 @@ module.exports = {
         // 'streamStartTime',
         // 'reactionRole',
         // 'superChat',
-        'memberChecker3',
+        // 'memberChecker3',
     ],
 
     debugChannelID: '1024627739023650827',

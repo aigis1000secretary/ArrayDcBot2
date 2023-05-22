@@ -179,6 +179,7 @@ class Pg {
             const res = await pool.query(sql).catch((error) => { console.log(error.message) });
             if (res) { for (let row of res.rows) { row.discord_id = row.discord_id.trim(); } }
             this.dataCache.set(discordID, res.rows[0]);
+            return res;
         }
 
         return res;
@@ -231,7 +232,7 @@ class YoutubeAPI {
 
     // youtube api
     async getVideoSearch({ channelId = this.holoChannelID, eventType, order, publishedAfter } = {}) {
-        mclog(`[MC] youtube.getVideoSearch( ${channelId}, ${eventType} )`);
+        mclog(`[MC3] youtube.getVideoSearch( ${channelId}, ${eventType} )`);
         if (this.quotaExceeded[0]) {
             return {
                 code: 403, message: 'quotaExceeded', reason: 'quotaExceeded',
@@ -303,7 +304,7 @@ class YoutubeAPI {
         }
     };
     async getVideoStatus(vID) {
-        mclog(`[MC] youtube.getVideoStatus( ${vID} )`);
+        mclog(`[MC3] youtube.getVideoStatus( ${vID} )`);
         if (this.quotaExceeded[0]) {
             // return {
             //     code: 403, message: 'quotaExceeded', reason: 'quotaExceeded',
@@ -339,7 +340,7 @@ class YoutubeAPI {
             // get response data
             const data = res.body;
             if (data.pageInfo.totalResults == 0) {
-                console.log('[MC] video not found.');
+                console.log('[MC3] video not found.');
                 // return {
                 //     code: 200, message: 'video not found', reason: 'video not found',
                 //     variabale: { vID }
@@ -407,7 +408,7 @@ class YoutubeAPI {
                 liveChatId,
                 pageToken
             }
-            mclog(`[MC] youtube.getStreamChat( ${liveChatId}, ${pageToken} )`);
+            mclog(`[MC3] youtube.getStreamChat( ${liveChatId}, ${pageToken} )`);
             const res = await get({ url, qs: params, json: true });
 
             // throw error
@@ -508,7 +509,7 @@ class McChannelCore {
 
         // ready to show search result
         sleep(1000).then(() => {
-            mclog(`[MC] now time:`, new Date(Date.now()).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }));
+            mclog(`[MC3] now time:`, new Date(Date.now()).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }));
         });
 
         // get REALLY video data
@@ -547,7 +548,7 @@ class McChannelCore {
 
             // show search result
             sleep(1000).then(() => {
-                mclog(`[MC] stream at`,
+                mclog(`[MC3] stream at`,
                     new Date(Date.parse(startTime)).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' }),
                     vID,
                     status.padStart(8, ' '),
@@ -574,10 +575,10 @@ class McChannelCore {
 
         // check liveChatId
         if (!liveChatId) {
-            mclog(`[MC] traceStreamChat: ${vID}`);
+            mclog(`[MC3] traceStreamChat: ${vID}`);
 
             if (!this.streamList.has(vID)) {
-                mclog(`[MC] Can't found video data`);
+                mclog(`[MC3] Can't found video data`);
                 // return;
 
                 let videoStatus = await this.youtube.getVideoStatus(vID);
@@ -587,7 +588,7 @@ class McChannelCore {
             let video = this.streamList.get(vID);
             liveChatId = video.liveStreamingDetails?.activeLiveChatId;
             if (!liveChatId) {
-                mclog(`[MC] Can't found video liveChatId`);
+                mclog(`[MC3] Can't found video liveChatId`);
                 return;
             }
         }
@@ -701,11 +702,11 @@ class McChannelCore {
 
         // only trace 1 stream in same time
         if (this.cacheStreamID != null && this.cacheStreamID != vID) { return; }
-        // set working video id
-        this.cacheStreamID = vID;
+        // // set working video id
+        // this.cacheStreamID = vID;
 
         if (!this.streamList.has(vID)) {
-            mclog(`[MC] Can't found video data`);
+            mclog(`[MC3] Can't found video data`);
             // return;
 
             let videoStatus = await this.youtube.getVideoStatus(vID);
@@ -745,17 +746,33 @@ class McChannelCore {
                     let [, filename] = eventData.match(/Destination:\s*([\S\s]+\.live_chat\.json)/);
                     console.log(filename)
 
+                    // set file pool
                     if (!this.livechatRawPool.has(vID)) {
                         this.livechatRawPool.set(vID, { filename, indexOfLine: 0 });
                     }
+
+                    // set working video id
+                    this.cacheStreamID = vID;
+
+                    // delete video data
+                    this.streamList.delete(vID);
                 }
             })
             .on('error', (error) => {
+                // clear file pool
                 if (this.livechatRawPool.has(vID)) {
                     this.livechatRawPool.delete(vID);
                 }
+
+                // disable working video id
+                this.cacheStreamID = null;
+
+                // delete video data
+                this.streamList.delete(vID);
+
                 if (this.interval) { clearTimeout(this.interval); }
 
+                // log
                 if (error.toString().includes('members-only')) {
                     if (!memberOnly) {
                         // retry with cookie
@@ -768,10 +785,20 @@ class McChannelCore {
                 }
             })
             .on('close', () => {
+                // clear file pool
                 if (this.livechatRawPool.has(vID)) {
                     this.livechatRawPool.delete(vID);
                 }
+
+                // disable working video id
+                this.cacheStreamID = null;
+
+                // delete video data
+                this.streamList.delete(vID);
+
                 if (this.interval) { clearTimeout(this.interval); }
+
+                // log
                 console.log(`ytDlpWrap all done`);
             }); //*/
 
@@ -833,7 +860,8 @@ class McChannelCore {
                     isChatModerator: false, isChatOwner: false,
                     isChatSponsor: false, isVerified: false,
                     sponsorLevel: 0,
-                    profileImageUrl: ''
+                    profileImageUrl: '',
+                    timestampText: renderer.timestampText.simpleText
                 }
                 // user level
                 let authorBadges = renderer.authorBadges || [];
@@ -891,6 +919,9 @@ class McChannelCore {
 }
 
 class McGuildCore {
+    client = null;
+    dcPushEmbed = async () => { };
+
     guildID = '';
 
     holoChannelID = '';
@@ -928,9 +959,6 @@ class McGuildCore {
 
         await this.checkExpiresUser();
     }
-
-    client = null;
-    dcPushEmbed = async () => { };
 
     // check user role / membership expires
     async checkExpiresUser() {
@@ -1080,25 +1108,103 @@ class McGuildCore {
             + `scope=identify%20connections`;
         return url;
     }
-    // cmdStreamList() {
-    //     let streamList = [];
+    cmdStreamList() {
+        let upcomingList = [];
+        let liveList = [];
+        // holoChannelID
 
-    //     for (let vID of this.cacheStreamList.keys()) {
-    //         // get cache
-    //         let video = this.cacheStreamList.get(vID).video;
-    //         mclog(`[MC] ${vID} ${video ? 'Object' : video}`);
-    //         if (!video) { continue; }
+        for (let [vID, video] of mainMcCore.ytChannelCores.get(this.holoChannelID).streamList) {
+            // get cache
+            mclog(`[MC3] ${vID} ${video ? 'Object' : video}`);
+            if (!video) { continue; }
 
-    //         // get video data
-    //         let description = video ? video.snippet.title : vID;
-    //         streamList.push(`[${description}](http://youtu.be/${vID})`);
-    //     }
+            // check stream start time
+            let status = video.snippet.liveBroadcastContent;
+            mclog(`${status.padStart(12, ' ')} <${video.snippet.title}>`);
 
-    //     return ['直播台:'].concat(streamList);
-    // }
+            // get video data
+            let description = video ? video.snippet.title : vID;
+            if (status == 'upcoming') {
+                upcomingList.push(`[${description}](http://youtu.be/${vID})`);
+            } else if (status == 'live') {
+                liveList.push(`[${description}](http://youtu.be/${vID})`);
+            }
+
+            // // get video data
+            // let description = video ? video.snippet.title : vID;
+            // streamList.push(`[${description}](http://youtu.be/${vID})`);
+        }
+
+        return [].concat(['直播中:'], liveList, ['待機台:'], upcomingList);
+    }
+    async changeChannelName() {
+        let channels = [this.streamChannelID, this.memberChannelID];
+        let onLive = [false, false];
+
+        let ytCore = mainMcCore.ytChannelCores.get(this.holoChannelID);
+        let video = ytCore.streamList.get(ytCore.cacheStreamID) || null;
+        if (!video) { }
+        else {
+            // onLive
+            onLive = [!video.memberOnly, video.memberOnly];
+        }
+
+        for (let i = 0; i < 2; ++i) {
+            const channel = await this.client.channels.fetch(channels[i]);
+
+            // check channel permissions
+            let permissions = channel.permissionsFor(channel.guild.members.me);
+            if (!permissions.has(PermissionFlagsBits.ManageChannels)) {
+                mclog('Missing Permissions: MANAGE_CHANNELS');
+                continue;
+            }
+
+            let channelStatus = (onLive[i] ? '🔴' : '⚫');
+            let channelName = `${channelStatus}${channel.name.replace(/^[🔴⚫]+/, '')}`;
+
+            if (channel.name != channelName) {
+                console.log(`Set Channel's name to ${channelName}`)
+                channel.setName(channelName)
+                    .then(newChannel => console.log(`Channel's name now is ${newChannel.name}`))
+                    // .catch(console.log);
+                    .catch((error) => {
+                        console.log(this.client);
+                        console.log(channel);
+                        console.log(permissions.has(PermissionFlagsBits.ManageChannels));
+                        console.log(error);
+                    });
+            }
+        }
+    }
+
+    async sendChatMessage(auDetails, message, superchat, isMemberOnly) {
+        let vID = mainMcCore.ytChannelCores.get(this.holoChannelID).cacheStreamID;
+        let now = new Date(parseInt(userData[gCore.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' });
+
+        const cID = isMemberOnly ? this.memberChannelID : this.streamChannelID;
+        const channel = this.client.channels.fetch(cID);
+
+        let embed = new EmbedBuilder();
+
+        if (auDetails.isChatOwner) { embed.setColor(0xFFD600); }
+        else if (auDetails.isChatModerator) { embed.setColor(0x5F84F1); }
+        else if (auDetails.isChatSponsor) { embed.setColor(0x107516); }
+        embed.setThumbnail(auDetails.profileImageUrl)
+        embed.setTitle(auDetails.displayName)
+        if (timestampText) {
+            let [, hrs, min, sec] = timestampText.match(/(\d+:)?(\d+:)?\d+/) || [, '', '', ''];
+            let timeText = hrs.replace(':', 'h') + min.replace(':', 'm') + sec + 's';
+            embed.setURL(`https://youtu.be/${vID}&t=${timeText}`)
+        }
+
+        embed.setFooter({ text: `${vID} ${now}` });
+
+        channel.send({ embeds: [embed] }).catch(console.log);
+    }
 }
 
 class MainMemberCheckerCore {
+    interval = null;
 
     constructor() { };
     initialization = 0;
@@ -1117,6 +1223,8 @@ class MainMemberCheckerCore {
         await YTDlpWrap.downloadFromGithub(`yt-dlp.exe`).catch(() => { });
 
         await Pg.init();
+
+        this.interval = setTimeout(this.timeoutMethod, 2000);
 
         this.initialization = 2;
     }
@@ -1150,12 +1258,23 @@ class MainMemberCheckerCore {
             // ++this.c;
 
 
-            // yt livechat to discord message
-            let yCore = this.ytChannelCores.get(holoChannelID);
-            // check target channel
-            let isMemberOnly = yCore.cacheStreamMemberOnly();
-            // get channel from config ID
-            // gCore.sendMessage();
+
+            // check special livechat
+            if (auDetails.isChatOwner || auDetails.isChatModerator
+                || (auDetails.isChatSponsor && Math.random() < 0.1)
+            ) {
+                // yt livechat to discord message
+                // get ytCore
+                let ytCore = this.ytChannelCores.get(holoChannelID);
+                // check target channel
+                let isMemberOnly = ytCore.cacheStreamMemberOnly();
+
+                const gCores = this.guildCores.filter((gCore) => (gCore.holoChannelID == holoChannelID));
+                for (let gCore of gCores) {
+                    // get channel from config ID
+                    gCore.sendChatMessage(auDetails, message, superchat, isMemberOnly);
+                }
+            }
         }
     }
 
@@ -1187,9 +1306,25 @@ class MainMemberCheckerCore {
         }
     }
 
+    // clock
+    timeoutMethod = () => {
+        const now = Date.now();
+        // get trim time
+        const nowTime = (now % 1000 > 500) ? (now - (now % 1000) + 1000) : (now - (now % 1000));
+        // check every 1sec
+        const nextTime = nowTime + 1000;
+        const offsetTime = nextTime - now;
+        this.interval = setTimeout(this.timeoutMethod, offsetTime);
 
+        const nowDate = new Date(nowTime);
+        const hours = nowDate.getHours();
+        const minutes = nowDate.getMinutes();
+        const seconds = nowDate.getSeconds();
 
-    async clockMethod(client, { hours, minutes, seconds }) {
+        this.clockMethod({ hours, minutes, seconds });
+    }
+
+    async clockMethod({ hours, minutes, seconds }) {
 
         // check stream task list at XX:03:00
         if (![3, 4, 5, 7, 9, 11].includes(hours) &&
@@ -1197,23 +1332,29 @@ class MainMemberCheckerCore {
             this.getVideoLists();
         }
 
-
-
-
-
-
-
-
-
-
         // check channel name
-        // gCore.changeChannelName();
+        if (seconds % 10 == 0) {
+            for (let gCore of this.guildCores) {
+                gCore.changeChannelName();
+            }
+        }
+
+        if (minutes % 5 == 0 && seconds == 0) {
+            for (let [holoChannelID, ytCore] of mainMcCore.ytChannelCores) {
+                let video = ytCore.streamList.get(ytCore.cacheStreamID) || null;
+                if (!video) { continue; }
+
+
+
+            }
+        }
     }
 
     destroy() {
         for (let [holoChannelID, core] of this.ytChannelCores) {
             core.destroy();
         }
+        clearTimeout(this.interval);
     }
 }
 let mainMcCore = new MainMemberCheckerCore();
@@ -1227,88 +1368,84 @@ module.exports = {
     name: 'member checker',
     description: "check who is SSRB",
 
-    // async execute(message, pluginConfig, command, args, lines) {
 
-    //     if (!command) { return false; }
+    async execute(message, pluginConfig, command, args, lines) {
 
-    //     const { client, channel } = message;
+        if (!command) { return false; }
+        const { client, guild, channel } = message;
 
-    //     // check core
-    //     let cores = coreArray.filter((core) => { return (core.botID == client.user.id && core.guild.id == message.guild.id); });
-    //     if (cores.length <= 0) { return false; }
+        const gCores = mainMcCore.guildCores.filter((gCore) => (gCore.guildID == guild.id));
+        if (gCores.length <= 0) { return false; }
 
-    //     for (let core of cores) {
-    //         const isLogChannel = (channel.id == core.logChannelID);
+        for (let gCore of gCores) {
+            const isLogChannel = (channel.id == gCore.logChannelID);
 
-    //         if (isLogChannel && command == 'mcdebug') {
-    //             mclog = (mclog == console.log) ?
-    //                 (() => { }) : console.log;
-    //             continue;
-    //         }
-    //         if (isLogChannel && command == 'user') {
-    //             let dID = args[0];
-    //             if (!dID) {
-    //                 channel.send({ content: `!user <user discord ID>` });
-    //                 continue;
-    //             }
+            if (isLogChannel && command == 'mcdebug') {
+                mclog = (mclog == console.log) ?
+                    (() => { }) : console.log;
+                return;
+            }
 
-    //             let data = await core.pg.getDataByDiscordID(dID.trim());
-    //             console.log(data)
+            if (isLogChannel && command == 'user') {
+                let dID = args[0];
+                if (!dID) {
+                    channel.send({ content: `!user <user discord ID>` });
+                    continue;
+                }
 
-    //             channel.send({ content: `${dID}\n${JSON.stringify(data, null, 2)}` });
-    //             continue;
-    //         }
-    //         if (isLogChannel && command == 'database') {
-    //             // get response
-    //             let response = await core.cmdExpiredUser();
+                let data = ((await Pg.getDataByDiscordID(dID.trim()))?.rows || [])[0];
+                console.log(data)
 
-    //             // log to console
-    //             for (let res of response) { console.log(res); }
+                channel.send({ content: `${dID}\n${JSON.stringify(data, null, 2)}` });
+                continue;
+            }
 
-    //             // log to channel
-    //             if (response.length > 0) {
-    //                 let embeds = [new EmbedBuilder().setDescription(response.join('\n'))];
-    //                 channel.send({ embeds });
-    //             }
-    //             continue;
-    //         }
-    //         if (command == 'member') {
-    //             channel.send({ content: core.get301Url() });
-    //             continue;
-    //         }
-    //         if (command == 'stream') {
-    //             // force update all stream list cache by admin
+            if (command == 'member') {
+                channel.send({ content: gCore.get301Url() });
+                continue;
+            }
 
-    //             if (regUrl.test(args[0])) {
-    //                 // get vID
-    //                 const [, , , , , vID] = args[0].match(regUrl);
+            if (command == 'stream') {
+                // force update all stream list cache by admin
 
-    //                 // get video data from API
-    //                 let video = await core.youtube.getVideoStatus(vID)
-    //                 // update cache data
-    //                 if (video && video.snippet && video.snippet.channelId == core.youtube.holoChannelID) {
-    //                     core.cacheStreamList[vID] = video;
-    //                     core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`手動新增直播清單`));
-    //                 }
-    //             } else if (isLogChannel) {
-    //                 await core.cacheStreamLists();
-    //                 core.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`更新直播清單`));
-    //             }
+                let ytCore = mainMcCore.ytChannelCores.get(gCore.holoChannelID);
+                if (regUrl.test(args[0])) {
+                    // get vID
+                    const [, , , , , vID] = args[0].match(regUrl);
 
-    //             // get response
-    //             let streamList = core.cmdStreamList();
+                    // get video data from API
+                    let video = await ytCore.youtube.getVideoStatus(vID)
+                    // update cache data
+                    if (video && video.snippet && video.snippet.channelId == ytCore.holoChannelID) {
 
-    //             let embed = new EmbedBuilder().setColor(Colors.DarkGold);
-    //             if (streamList.length <= 0) { embed.setDescription(`目前沒有直播台/待機台`); }
-    //             else { embed.setDescription(streamList.join('\n')); }
-    //             channel.send({ embeds: [embed] });
+                        if (ytCore.streamList.has(vID)) {
+                            // update liveBroadcastContent
+                            video.memberOnly = ytCore.streamList.get(vID).memberOnly;
+                        }
+                        // cache video data
+                        ytCore.streamList.set(vID, video);
 
-    //             continue;
-    //         }
-    //     }
+                        gCore.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`手動新增直播清單`));
+                    }
+                } else if (isLogChannel) {
+                    await ytCore.getVideoList();
+                    gCore.dcPushEmbed(new EmbedBuilder().setColor(Colors.DarkGold).setDescription(`更新直播清單`));
+                }
 
-    //     return true;
-    // },
+                // get response
+                let streamList = gCore.cmdStreamList();
+
+                let embed = new EmbedBuilder().setColor(Colors.DarkGold);
+                if (streamList.length <= 0) { embed.setDescription(`目前沒有直播台/待機台`); }
+                else { embed.setDescription(streamList.join('\n')); }
+                embed.setFooter({ text: gCore.holoChannelID });
+
+                channel.send({ embeds: [embed] });
+
+                continue;
+            }
+        }
+    },
 
     async setup(client) {
 
@@ -1320,187 +1457,160 @@ module.exports = {
             await mainMcCore.init();
 
             for (let config of pluginConfig) {
+                // get guild object
+                const guild = client.guilds.cache.get(gID);
+                if (!guild) { continue; }    // bot not in guild
+                if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) { console.log(`Missing Permissions: MANAGE_ROLES in <${gID}>`); continue; }
+                if (!guild.members.me.permissions.has(PermissionFlagsBits.SendMessages)) { console.log(`Missing Permissions: SEND_MESSAGES in <${gID}>`); continue; }
+
+
+
                 await mainMcCore.addYoutubeChannel(config);
                 await mainMcCore.addGuild(config, { client, gID });
             }
-            // await sleep(1000)
-            // mainMcCore.ytChannelCores.get(`UCUKD-uaobj9jiqB-VXt71mA`).traceStreamChatByYtdlp({ vID: 'Vx1K89idggs' });
         }
+        // test code
+        // await sleep(1000)
+        // mainMcCore.ytChannelCores.get(`UCUKD-uaobj9jiqB-VXt71mA`).traceStreamChatByYtdlp({ vID: 'Vx1K89idggs' });
+
+        client.once('close', () => {
+            // offline msg
+            mainMcCore.destroy();
+        });
     }
-
-    // async setup(client) {
-    //     // get guild list if bot working space
-    //     for (let gID of client.guildConfigs.keys()) {
-
-    //         const pluginConfig = client.getPluginConfig(gID, `memberChecker3`);
-    //         if (!pluginConfig) { continue; }
-
-    //         // get config list for guild with gID
-    //         for (let mcConfig of pluginConfig) {
-
-    //             // get guild object
-    //             const guild = client.guilds.cache.get(gID);
-    //             if (!guild) { continue; }    // bot not in guild
-    //             if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) { console.log(`Missing Permissions: MANAGE_ROLES in <${gID}>`); continue; }
-    //             if (!guild.members.me.permissions.has(PermissionFlagsBits.SendMessages)) { console.log(`Missing Permissions: SEND_MESSAGES in <${gID}>`); continue; }
-
-    //             // check role
-    //             const role = guild.roles.cache.get(mcConfig.memberRoleID);
-    //             if (!role) { console.log(`Missing Role: <@&${mcConfig.memberRoleID}> in <${gID}>`); continue; }    // cant found role
-
-    //             let newCore = new memberCheckerCore(client, mcConfig, guild, role);
-    //             await newCore.coreInit();
-    //             coreArray.push(newCore);
-    //         }
-    //     }
-
-    // },
-
-    // clockMethod(client, { hours, minutes, seconds }) {
-
-    // }
 }
 
 
 
+// express
+const app = require('../server.js').app;
+app.all(`/member/:botid/:ekey`, async (req, res) => {
+    let botID = req.params.botid;
+    let expiresKey = req.params.ekey;
 
+    const gCore = mainMcCore.guildCores.find((gCore) => (gCore.client.user.id == botID && gCore.expiresKey == expiresKey));
 
+    if (!gCore) {
+        res.send(`不明的參數組! 請聯絡管理員或製作者\n${botID}, ${expiresKey}`);
+        return;
+    }
 
+    res.redirect(301, gCore.getAuthorizeUrl());
+    return;
+});
 
+app.all('/callback', async (req, res) => {
+    const param = req.query.state || '';
+    const [, botID, expiresKey] = (param.match(/^(\d{17,19})(\S+)$/) || [, 'null', 'null']);
 
+    const gCores = mainMcCore.guildCores.filter((gCore) => (gCore.client.user.id == botID && gCore.expiresKey == expiresKey));
 
+    if (gCores.length <= 0) {
+        res.status(404).send(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
+        console.log(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
+        return;
+    }
 
+    let gCore = gCores[0];
+    try {
+        let headers = { "Content-Type": "application/x-www-form-urlencoded" };
+        let body = [
+            `client_id=${gCore.client.user.id}`,
+            `&client_secret=${gCore.client.mainConfig.clientSecret}`,
+            '&grant_type=authorization_code',
+            `&code=${req.query.code}`,
+            `&redirect_uri=${redirectUri}/callback`,
+            '&scope=connections'
+        ].join('');
 
+        // get oauth2 token
+        let tokenResponse = await post({ url: `${API_ENDPOINT}/oauth2/token`, headers, body, json: true })
+        let { access_token } = tokenResponse.body;
+        // response.body = {
+        //     access_token: '------------------------------', expires_in: 604800,
+        //     refresh_token: '------------------------------', scope: 'connections', token_type: 'Bearer'
+        // }
 
+        // get user connections
+        headers = { Authorization: "Bearer " + access_token }
+        let identify = await get({ url: `${API_ENDPOINT}/users/@me`, headers, json: true })
+        let connections = await get({ url: `${API_ENDPOINT}/users/@me/connections`, headers, json: true })
+        // get user data
+        let cID = null;         // YT channel ID
+        let dID = null;         // Discord user ID
+        let username = null;    // Discord user name
+        let tag = null;         // Discord user tag number
 
-// // express
-// const app = require('../server.js').app;
-// app.all(`/member/:botid/:ekey`, async (req, res) => {
-//     let botID = req.params.botid;
-//     let expiresKey = req.params.ekey;
+        if (identify.body) {
+            dID = identify.body.id;
+            username = identify.body.username;
+            tag = identify.body.discriminator;
+        }
 
-//     // get core form botid
-//     let core = coreArray.find((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
-//     if (!core) {
-//         res.send(`不明的參數組! 請聯絡管理員或製作者\n${botID}, ${expiresKey}`);
-//         return;
-//     }
+        // get discord user connections data
+        if (connections.body && Array.isArray(connections.body)) {
+            for (let connect of connections.body) {
+                if (connect.type != 'youtube') { continue; }
+                cID = connect.id;
+                break;
+            }
+        }
 
-//     res.redirect(301, core.getAuthorizeUrl());
-//     return;
-// });
-// app.all('/callback', async (req, res) => {
-//     const param = req.query.state || '';
-//     const [, botID, expiresKey] = (param.match(/^(\d{17,19})(\S{12})$/) || [, 'null', 'null']);
+        // didn't found youtube cID
+        if (cID == null) {
+            let html = [
+                `User: ${username}`,
+                `Youtube channel: ERROR! Can't found connect data!`,
+                `               : 錯誤! 找不到帳號連結資訊!`
+            ].join('<br>')
 
-//     let cores = coreArray.filter((core) => { return (core.botID == botID && core.expiresKey == expiresKey); });
-//     if (cores.length <= 0) {
-//         res.status(404).send(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
-//         console.log(`ERR! cant found member checker core (${botID}, ${expiresKey})`);
-//         return;
-//     }
+            res.send(html);
+            return;
+        }
 
-//     let core = cores[0];
-//     try {
-//         let headers = { "Content-Type": "application/x-www-form-urlencoded" };
-//         let body = `client_id=${core.botID}`
-//         body += `&client_secret=${core.clientSecret}`
-//         body += '&grant_type=authorization_code'
-//         body += `&code=${req.query.code}`
-//         body += `&redirect_uri=${redirectUri}/callback`
-//         body += '&scope=connections'
-//         // get oauth2 token
-//         let tokenResponse = await post({ url: `${API_ENDPOINT}/oauth2/token`, headers, body, json: true })
-//         let { access_token } = tokenResponse.body;
-//         // response.body = {
-//         //     access_token: '------------------------------', expires_in: 604800,
-//         //     refresh_token: '------------------------------', scope: 'connections', token_type: 'Bearer'
-//         // }
+        // check database
+        pgData = (await Pg.getDataByDiscordID(dID))?.rows || [];
+        if (pgData.length <= 0) {
+            await Pg.creatData(dID, cID);
+        } else if (pgData[0].youtube_id != cID) {
+            await Pg.updateYoutubeID(dID, cID);
+        }
 
-//         // get user connections
-//         headers = { Authorization: "Bearer " + access_token }
-//         let identify = await get({ url: `${API_ENDPOINT}/users/@me`, headers, json: true })
-//         let connections = await get({ url: `${API_ENDPOINT}/users/@me/connections`, headers, json: true })
-//         // get user data
-//         let cID = null;         // YT channel ID
-//         let dID = null;         // Discord user ID
-//         let username = null;    // Discord user name
-//         let tag = null;         // Discord user tag number
+        // get result
+        let userData = await Pg.getDataByDiscordID(dID);
+        let html = [
+            `User: ${username}`,
+            `Youtube channel: https://www.youtube.com/channel/${cID}`,
+        ];
+        if (parseInt(userData[gCore.expiresKey]) == 0) {
+            html.push(`expires in time: ${new Date(parseInt(userData[gCore.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' })}`);
+        } else {
+            html.push(`expires in time: waiting Authorize`);
+        }
+        res.send(html.join('<br>'));
 
-//         if (identify.body) {
-//             dID = identify.body.id;
-//             username = identify.body.username;
-//             tag = identify.body.discriminator;
-//         }
+        for (gCore of gCores) {
+            // log
+            gCore.dcPushEmbed(new EmbedBuilder().setColor(Colors.Green).setDescription(`申請完成: ${username}@${tag} <@${dID}>`));
+        }
+        return;
+    } catch (e) {
+        console.log(e)
+        res.send(e.message);
+        return;
+    }
 
-//         // get discord user connections data
-//         if (connections.body && Array.isArray(connections.body)) {
-//             for (let connect of connections.body) {
-//                 if (connect.type != 'youtube') { continue; }
-//                 cID = connect.id;
-//                 break;
-//             }
-//         }
+    // {
+    //     identify.body = {
+    //         accent_color: null, avatar: '0b69434e070a29d575737ed159a29224',
+    //         banner: null, banner_color: null, discriminator: '8676', flags: 0,
+    //         id: '353625493876113440', locale: 'zh-TW', mfa_enabled: true,
+    //         public_flags: 0, username: 'K.T.710'
+    //     }
 
-//         // didn't found youtube cID
-//         if (cID == null) {
-//             let html = [
-//                 `User: ${username}`,
-//                 `Youtube channel: ERROR! Can't found connect data!`,
-//                 `               : 錯誤! 找不到帳號連結資訊!`
-//             ].join('<br>')
-
-//             res.send(html);
-//             return;
-//         }
-
-//         // insert data
-//         if (await core.pg.insertData(dID, cID) == null) {
-//             let html = [
-//                 `User: ${username}`,
-//                 `Database channel: ERROR! PG insert data error!`,
-//                 `                : 資料庫錯誤! ${dID}, ${cID}`
-//             ].join('<br>')
-
-//             res.send(html);
-//             return;
-//         }
-
-//         // get result
-//         let userData = await core.pg.getDataByDiscordID(dID);
-//         let html = [
-//             `User: ${username}`,
-//             `Youtube channel: https://www.youtube.com/channel/${cID}`,
-//             `expires in time: ${new Date(parseInt(userData[core.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' })}`
-//         ].join('<br>')
-
-//         res.send(html);
-
-//         for (core of cores) {
-//             // log
-//             core.dcPushEmbed(new EmbedBuilder().setColor(Colors.Green).setDescription(`申請完成: ${username}@${tag} <@${dID}>`));
-
-//             // delete this user's data from cache if on stream
-//             if (core.cacheMemberList.includes(cID)) { core.cacheMemberList = core.cacheMemberList.filter((e) => e != cID); }
-//         }
-//         return;
-//     } catch (e) {
-//         console.log(e)
-//         res.send(e.message);
-//         return;
-//     }
-
-//     // {
-//     //     identify.body = {
-//     //         accent_color: null, avatar: '0b69434e070a29d575737ed159a29224',
-//     //         banner: null, banner_color: null, discriminator: '8676', flags: 0,
-//     //         id: '353625493876113440', locale: 'zh-TW', mfa_enabled: true,
-//     //         public_flags: 0, username: 'K.T.710'
-//     //     }
-
-//     //     connections.body[0] = {
-//     //         friend_sync: false, id: 'UC-JsTXzopVL28gQXEUV276w', name: 'K.T.',
-//     //         show_activity: true, type: 'youtube', verified: true, visibility: 1
-//     //     }
-//     // }
-// });
+    //     connections.body[0] = {
+    //         friend_sync: false, id: 'UC-JsTXzopVL28gQXEUV276w', name: 'K.T.',
+    //         show_activity: true, type: 'youtube', verified: true, visibility: 1
+    //     }
+    // }
+});

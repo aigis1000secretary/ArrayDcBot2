@@ -12,9 +12,9 @@ module.exports = {      // KTG
             expiresKey: 'testa_expires',
 
             memberRoleID: '927501058484371487',          // @&SSRB
-            logChannelID: '1009645372831977482',         // #_log
-            streamChannelID: '1008565763260551188',      // #⚫_stream
-            memberChannelID: '1010005672152281218',      // #⚫_member
+            logChannelID: '1024627281592848434',         // #⁠_bot-test
+            streamChannelID: '1024627739023650827',      // #⚫_stream
+            memberChannelID: '1024627744681771108',      // #⚫_member
         },
         {
             holoChannelID: 'UC_vMYWcDjmfdpH6r4TTn1MQ',   // kazama
@@ -24,9 +24,9 @@ module.exports = {      // KTG
             expiresKey: 'testb_expires',
 
             memberRoleID: '928092487044710441',          // @&KMZT
-            logChannelID: '1009645372831977482',         // #_log
-            streamChannelID: '1010167343378333768',      // #⚫_stream2
-            memberChannelID: '1010167418598981652',      // #⚫_member2
+            logChannelID: '1024627281592848434',         // #⁠_bot-test
+            streamChannelID: '1110077306053070920',      // #⚫_stream2
+            memberChannelID: '1110077379994472540',      // #⚫_member2
         },
         // {
         //     holoChannelID: 'UCc88OV45ICgHbn3ZqLLb52w',   // Fuma
