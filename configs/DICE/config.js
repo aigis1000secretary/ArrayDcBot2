@@ -16,6 +16,7 @@ module.exports = {
         // 'reactionRole',
         // 'superChat',
         // 'memberChecker3',
+        'reboot',
     ],
 
     herokuToken: process.env.HEROKU_TOKEN,

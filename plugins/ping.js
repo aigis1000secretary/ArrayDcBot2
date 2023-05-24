@@ -1,6 +1,7 @@
 
 const sleep = (ms) => { return new Promise((resolve) => { setTimeout(resolve, ms); }); };
 
+const { EmbedBuilder } = require('discord.js');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const channelID = '1009645372831977482';
@@ -9,7 +10,7 @@ module.exports = {
     name: 'ping',
     description: 'pong',
     
-    execute(message, pluginConfig, command, args, lines) {
+    async execute(message, pluginConfig, command, args, lines) {
 
         if (command != 'ping') { return; }
 
@@ -19,8 +20,30 @@ module.exports = {
                     .setLabel("Ping!")
                     .setCustomId("ping")
                 );
+        
+        let embeds = [];
+        if (args[0]){
+            let msg = `${args[0]}`
 
-        message.reply({ content: `pong!`, components: [actionRow], allowedMentions: { repliedUser: false } }).catch(() => { });
+            let emojis = await message.guild.emojis.fetch();
+            for(let [eID, emoji]  of emojis) {
+                msg = msg.replaceAll(`:${emoji.name}:`, `<:${emoji.name}:${emoji.id}>`);
+            }
+            
+            embeds.push(new EmbedBuilder().setDescription(msg));
+        }
+        if (args[0]){
+            let msg = `# ${args[0]}`
+
+            let emojis = await message.guild.emojis.fetch();
+            for(let [eID, emoji]  of emojis) {
+                msg = msg.replaceAll(`:${emoji.name}:`, `<:${emoji.name}:${emoji.id}>`);
+            }
+            
+            embeds.push(new EmbedBuilder().setDescription(msg));
+        }
+        
+        message.reply({ content: `pong!`, embeds, components: [actionRow], allowedMentions: { repliedUser: false } }).catch(() => { });
     },
 
     async messageDelete(message, pluginConfig) {

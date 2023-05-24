@@ -49,7 +49,7 @@ let client = null;
 const downloadBlacklist = async () => {
     if (!client) { return; }
     if (fs.existsSync(dataPath)) {
-        fs.rmdirSync(dataPath, { recursive: true, force: true });
+        fs.rmSync(dataPath, { recursive: true, force: true });
     }
 
     // get channel/message by id
