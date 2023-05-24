@@ -7,6 +7,8 @@ const { default: YTDlpWrap } = require("yt-dlp-wrap");
 
 let mclog = debug ? console.log : () => { };
 const sleep = (ms) => { return new Promise(resolve => setTimeout(resolve, ms)); };
+const md5 = (source) => require('crypto').createHash('md5').update(source).digest('hex');
+
 
 // discord
 const { EmbedBuilder, PermissionFlagsBits, Colors } = require('discord.js');
@@ -402,8 +404,8 @@ class YoutubeAPI {
         try {
             const url = 'https://www.googleapis.com/youtube/v3/liveChat/messages';
             const params = {
-                // part: 'id,snippet,authorDetails',
-                part: 'id,authorDetails',
+                part: 'id,snippet,authorDetails',
+                // part: 'id,authorDetails',
                 key: this.apiKey[1],
                 liveChatId,
                 pageToken
@@ -498,7 +500,7 @@ class McChannelCore {
 
                 if (this.streamList.has(vID)) {
                     // update liveBroadcastContent
-                    video.memberOnly = this.streamList.get(vID).memberOnly;
+                    video.memberOnly = this.streamList.get(vID)?.memberOnly;
                 }
 
                 // cache video data
@@ -687,8 +689,9 @@ class McChannelCore {
             //     isVerified: false,
             //     profileImageUrl: 'https://yt3.ggpht.com/ytc/AGIKgqNMdgsY_f_3yAnQQgKqKVRnfEnuPaTfaAGwgItm4w=s88-c-k-c0x00ffffff-no-rj'
             // }
-            let message = chatMessage.textMessageDetails?.messageText || '';
-            let superchat = chatMessage.superChatDetails?.amountDisplayString || '';
+
+            let message = chatMessage.snippet?.textMessageDetails?.messageText || '';
+            let superchat = chatMessage.snippet?.superChatDetails?.amountDisplayString || '';
 
             // callback
             await mainMcCore.onLiveChat(this.holoChannelID, auDetails, message, superchat);
@@ -753,9 +756,6 @@ class McChannelCore {
 
                     // set working video id
                     this.cacheStreamID = vID;
-
-                    // delete video data
-                    this.streamList.delete(vID);
                 }
             })
             .on('error', (error) => {
@@ -767,8 +767,8 @@ class McChannelCore {
                 // disable working video id
                 this.cacheStreamID = null;
 
-                // delete video data
-                this.streamList.delete(vID);
+                // // delete video data
+                // this.streamList.delete(vID);
 
                 if (this.interval) { clearTimeout(this.interval); }
 
@@ -861,7 +861,7 @@ class McChannelCore {
                     isChatSponsor: false, isVerified: false,
                     sponsorLevel: 0,
                     profileImageUrl: '',
-                    timestampText: renderer.timestampText.simpleText
+                    timestampText: renderer.timestampText?.simpleText || null
                 }
                 // user level
                 let authorBadges = renderer.authorBadges || [];
@@ -889,23 +889,40 @@ class McChannelCore {
                 }
                 // user icon
                 let thumbnails = renderer.authorPhoto?.thumbnails || [];
-                for (let icon of thumbnails) {
-                    auDetails.profileImageUrl = icon.url;
-                }
+                auDetails.profileImageUrl = thumbnails.pop()?.url;
                 // message
                 let runs = renderer.message?.runs || [];
+                let emojis = new Map();
                 let message = '';
                 for (let { text, emoji } of runs) {
                     if (text) { message += text; }
                     if (emoji) {
-                        if (emoji.shortcuts) { message += ` ${emoji.shortcuts.pop()} `; }
-                        else { message += emoji.image.accessibility.accessibilityData.label; }
+                        let name;
+
+                        if (emoji.isCustomEmoji) {
+                            // get emoji shortcuts
+                            for (let term of emoji.searchTerms) {
+                                name = term;
+                                // discord emoji name rule
+                                if (/^[A-Za-z0-9_]+$/.test(name)) { break; }
+                            }
+                            // get emoji image
+                            let thumbnails = emoji.image?.thumbnails || [];
+                            let url = thumbnails.pop()?.url;
+
+                            emojis.set(name, url);
+
+                            name = `:${name}:`;
+                        } else {
+                            name = emoji.emojiId;
+                        }
+                        message += ` ${name} `;
                     }
                 }
                 // SC
                 let superchat = renderer.purchaseAmountText?.simpleText || '';
                 // callback
-                await mainMcCore.onLiveChat(this.holoChannelID, auDetails, message, superchat);
+                await mainMcCore.onLiveChat(this.holoChannelID, auDetails, message, superchat, emojis);
             }
         }
 
@@ -1142,6 +1159,7 @@ class McGuildCore {
         let onLive = [false, false];
 
         let ytCore = mainMcCore.ytChannelCores.get(this.holoChannelID);
+
         let video = ytCore.streamList.get(ytCore.cacheStreamID) || null;
         if (!video) { }
         else {
@@ -1179,24 +1197,30 @@ class McGuildCore {
 
     async sendChatMessage(auDetails, message, superchat, isMemberOnly) {
         let vID = mainMcCore.ytChannelCores.get(this.holoChannelID).cacheStreamID;
-        let now = new Date(parseInt(userData[gCore.expiresKey])).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' });
+        let now = new Date(Date.now()).toLocaleString('en-ZA', { timeZone: 'Asia/Taipei' });
 
         const cID = isMemberOnly ? this.memberChannelID : this.streamChannelID;
-        const channel = this.client.channels.fetch(cID);
+        const channel = await this.client.channels.fetch(cID);
 
         let embed = new EmbedBuilder();
 
         if (auDetails.isChatOwner) { embed.setColor(0xFFD600); }
         else if (auDetails.isChatModerator) { embed.setColor(0x5F84F1); }
-        else if (auDetails.isChatSponsor) { embed.setColor(0x107516); }
-        embed.setThumbnail(auDetails.profileImageUrl)
-        embed.setTitle(auDetails.displayName)
-        if (timestampText) {
-            let [, hrs, min, sec] = timestampText.match(/(\d+:)?(\d+:)?\d+/) || [, '', '', ''];
-            let timeText = hrs.replace(':', 'h') + min.replace(':', 'm') + sec + 's';
-            embed.setURL(`https://youtu.be/${vID}&t=${timeText}`)
+        else if (auDetails.isChatSponsor) { embed.setColor(0x13B56E); }
+        let url;
+        if (auDetails.timestampText) {
+            let timeText = '00:00:' + auDetails.timestampText;
+            let [, hrs, min, sec] = timeText.match(/(\d+):(\d+):(\d+)$/) || [, null, null, null];
+            timeText = `${hrs}h${min}m${sec}s`.replace(/^[0hm]+/, '');
+
+            url = `https://youtu.be/${vID}&t=${timeText}`;
         }
 
+        embed.setAuthor({
+            name: auDetails.displayName,
+            iconURL: auDetails.profileImageUrl, url
+        })
+        if (message) { embed.setDescription(message); }
         embed.setFooter({ text: `${vID} ${now}` });
 
         channel.send({ embeds: [embed] }).catch(console.log);
@@ -1205,11 +1229,12 @@ class McGuildCore {
 
 class MainMemberCheckerCore {
     interval = null;
+    guild = null;
 
     constructor() { };
     initialization = 0;
 
-    async init() {
+    async init(client) {
         if (this.initialization != 0) {
             while (this.initialization != 2) {
                 await sleep(500);
@@ -1225,13 +1250,13 @@ class MainMemberCheckerCore {
         await Pg.init();
 
         this.interval = setTimeout(this.timeoutMethod, 2000);
+        this.client = client;
+        this.guild = await client.guilds.fetch('713622845682614302');
 
         this.initialization = 2;
     }
 
-    // t = 0;
-    // c = 0;
-    async onLiveChat(holoChannelID, auDetails, message, superchat) {
+    async onLiveChat(holoChannelID, auDetails, message, superchat, customEmojis) {
         // console.log(
         //     `[Livechat ${holoChannelID}]`,
         //     (auDetails.isChatModerator ? '🔧' : '　'), (auDetails.isChatOwner ? '⭐' : '　'), (auDetails.isVerified ? '✔️' : '　'), (auDetails.isChatSponsor ? '🤝' : '　'),
@@ -1250,19 +1275,53 @@ class MainMemberCheckerCore {
             // check guild role by livechat
             await gCore.onLiveChat(gCore.guildID, auDetails, message, superchat)
 
-            // timer
-            // if (this.c % 1000 == 0) {
-            //     console.log(Date.now() - this.t, 'ms')
-            //     this.t = Date.now();
-            // }
-            // ++this.c;
-
-
 
             // check special livechat
-            if (auDetails.isChatOwner || auDetails.isChatModerator
-                || (auDetails.isChatSponsor && Math.random() < 0.1)
-            ) {
+            if (auDetails.isChatOwner || auDetails.isChatModerator) {
+
+                // fix emojis
+                if (customEmojis && customEmojis.size > 0) {
+                    let guildEmojis = await this.guild.emojis.fetch();
+
+                    for (let [name, url] of customEmojis) {
+                        // check emoji in guild or not
+                        let emoji = null;
+                        let md5Name = /^[A-Za-z0-9_]+$/.test(name) ? name : md5(name);
+                        for (let [eID, _emoji] of guildEmojis) {
+                            if (_emoji.name == md5Name) { emoji = _emoji; break; }
+                        }
+
+                        if (!emoji) {
+                            // emoji not in guild
+
+                            // check guild emoji volume, limit is 50 without nitro
+                            if (guildEmojis.size >= 50) {
+
+                                // emoji full, delete oldest emoji witch from bot
+                                for (let [eID, emoji] of guildEmojis) {
+                                    if (emoji.author.bot) {
+                                        await emoji.delete()
+                                            .then(() => { mclog('[MC3] delete emoji.'); })
+                                            .catch(console.log);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // create new emoji
+                            emoji = await this.guild.emojis.create({ attachment: url, name: md5Name })
+                                .catch((e) => { console.log(e.message); });
+                            // mclog(`[MC3] create emoji ${emoji}`);
+                        }
+
+                        if (!emoji) { continue; }   // some error?
+                        // now emoji in guild
+                        // replace message emoji string
+                        message = message.replaceAll(`:${name}:`, `<:${emoji.name}:${emoji.id}>`);
+                        // next custom emoji
+                    }
+                }
+
                 // yt livechat to discord message
                 // get ytCore
                 let ytCore = this.ytChannelCores.get(holoChannelID);
@@ -1365,7 +1424,7 @@ let mainMcCore = new MainMemberCheckerCore();
 
 
 module.exports = {
-    name: 'member checker',
+    name: 'member checker v3',
     description: "check who is SSRB",
 
 
@@ -1420,7 +1479,7 @@ module.exports = {
 
                         if (ytCore.streamList.has(vID)) {
                             // update liveBroadcastContent
-                            video.memberOnly = ytCore.streamList.get(vID).memberOnly;
+                            video.memberOnly = ytCore.streamList.get(vID)?.memberOnly;
                         }
                         // cache video data
                         ytCore.streamList.set(vID, video);
@@ -1473,7 +1532,7 @@ module.exports = {
             const pluginConfig = client.getPluginConfig(gID, 'memberChecker3');
             if (!pluginConfig) { continue; }
 
-            await mainMcCore.init();
+            await mainMcCore.init(client);
 
             for (let config of pluginConfig) {
                 // get guild object
