@@ -9,6 +9,7 @@ module.exports = {
     debugPlugins: [
         `ping`,
         'uptimer',
+        'delall',
         'memberChecker3',
     ],
 
