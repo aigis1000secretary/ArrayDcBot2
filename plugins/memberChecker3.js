@@ -1444,6 +1444,25 @@ module.exports = {
 
                 continue;
             }
+
+            if (command == 'freechat') {
+                let ytCore = mainMcCore.ytChannelCores.get(gCore.holoChannelID);
+
+                for (let [vID, video] of ytCore.streamList) {
+                    // get cache
+                    if (!video) { continue; }
+
+                    // check stream start time
+                    let status = video.snippet.liveBroadcastContent;
+
+                    // get video data
+                    if (status != 'upcoming') { continue; }
+
+                    ytCore.traceStreamChat({ vID });
+                }
+
+                continue;
+            }
         }
     },
 
