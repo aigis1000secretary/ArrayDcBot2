@@ -1393,18 +1393,42 @@ class MainMemberCheckerCore {
 
         // check channel name
         if (seconds % 10 == 0) {
+            for (let [holoChannelID, ytCore] of this.ytChannelCores) {
+                if (ytCore.cacheStreamID) { continue; }
+
+                for (let [vID, video] of ytCore.streamList) {
+                    let _video = video;
+                    // check upcoming
+                    if (video.snippet.liveBroadcastContent == 'upcoming') {
+                        // skip freechat
+                        let startTime = video.liveStreamingDetails?.scheduledStartTime || 0;
+                        if (startTime && Date.parse(startTime) > Date.now()) { continue; }
+
+                        // now on live time, recheck stream if status is upcoming
+                        // get REALLY video data from API
+                        _video = await ytCore.youtube.getVideoStatus(vID);
+
+                        // API error, quotaExceeded
+                        if (!_video.snippet) {
+                            // delete nan data video
+                            if (ytCore.streamList.has(vID)) {
+                                ytCore.streamList.delete(vID);
+                            }
+                        }
+
+                        _video.memberOnly = ytCore.streamList.get(vID)?.memberOnly;
+                        ytCore.streamList.set(vID, _video);
+                    }
+
+                    if (_video.snippet.liveBroadcastContent == 'live') {
+                        ytCore.traceStreamChatByYtdlp({ vID });
+                    }
+                }
+            }
+
+
             for (let gCore of this.guildCores) {
                 gCore.changeChannelName();
-            }
-        }
-
-        if (minutes % 5 == 0 && seconds == 0) {
-            for (let [holoChannelID, ytCore] of mainMcCore.ytChannelCores) {
-                let video = ytCore.streamList.get(ytCore.cacheStreamID) || null;
-                if (!video) { continue; }
-
-
-
             }
         }
     }
