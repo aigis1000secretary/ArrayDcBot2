@@ -1,4 +1,4 @@
-// const { youtube } = require('../../config.js');
+// const { youtube } = require('../config.js');
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const CLOCK_A = ['<:clocka_0:895230067104440350>', '<:clocka_1:895230174382129162>', '<:clocka_2:895230190169509919>'];

@@ -2,6 +2,8 @@
 const [EMOJI_HAMMER_AND_WRENCH, EMOJI_BIRD, EMOJI_ALARM_CLOCK] = ['🛠️', '🐦', '⏰']
 const EMOJI_REBOOTED = (process.env.HOST_TYPE == 'FLY_IO' ? EMOJI_BIRD : EMOJI_ALARM_CLOCK);
 
+const DEBUG_CHANNEL_ID = '826992877925171250';
+
 const fs = require('fs');
 const path = require('path');
 
@@ -233,24 +235,26 @@ module.exports = {
             // dc bot online
             console.log(`=====${client.mainConfig.botName} is online!=====    setup plugins(${client.commands.size}):`);
 
-            // if (!fs.existsSync("./.env")) {
+            // if (!fs.existsSync("./.env"))
+            {
 
-            //     // const nowDate = new Date(Date.now());
-            //     // const hours = nowDate.getHours().toString().padStart(2, '0');
-            //     // const minutes = nowDate.getMinutes().toString().padStart(2, '0');
-            //     // await channel.send({ content: `<${hours}:${minutes}> ${botName} is online!` })
+                // const nowDate = new Date(Date.now());
+                // const hours = nowDate.getHours().toString().padStart(2, '0');
+                // const minutes = nowDate.getMinutes().toString().padStart(2, '0');
+                // await channel.send({ content: `<${hours}:${minutes}> ${botName} is online!` })
 
-            //     const channel = await client.channels.fetch(debugChannelID);
+                const channel = await client.channels.fetch(DEBUG_CHANNEL_ID);
 
-            //     const nowHours = new Date(Date.now()).getHours();
-            //     const nowMinutes = new Date(Date.now()).getMinutes();
-            //     const rebooted =
-            //         ([1, 9, 17].includes(nowHours) && nowMinutes >= 55) ||  // in reboot time
-            //         ([2, 10, 18].includes(nowHours) && nowMinutes < 5);     // really reboot time
-            //     const type = rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH;
-            //     const nowDate = parseInt(Date.now() / 1000);
-            //     await channel.send({ content: `<t:${nowDate}>  <t:${nowDate}:R> 📳! ${type}` })
-            // }
+                const nowHours = new Date(Date.now()).getHours();
+                const nowMinutes = new Date(Date.now()).getMinutes();
+                const rebooted =
+                    ([1, 9, 17].includes(nowHours) && nowMinutes >= 55) ||  // in reboot time
+                    ([2, 10, 18].includes(nowHours) && nowMinutes < 5);     // really reboot time
+                const type = rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH;
+                const nowDate = parseInt(Date.now() / 1000);
+                await channel.send({ content: `<t:${nowDate}>  <t:${nowDate}:R> 📳! ${type}` }).catch(() => { });
+            }
+
 
             // Emitted 
             for (let [key, value] of client.commands) {
@@ -263,9 +267,6 @@ module.exports = {
 
                 value.setup(client);
             }
-
-
-
 
 
             // clock

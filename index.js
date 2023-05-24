@@ -9,10 +9,28 @@ const sleep = (ms) => { return new Promise((resolve) => { setTimeout(resolve, ms
 
 let clients = [];
 module.exports.terminate = async () => {
+    // check all clients
+    for (let client of clients) {
+        // check all plugins
+        for (let [key, value] of client.commands) {
+            // idleCheck method
+            if (!!value.idleCheck && typeof (value.idleCheck) == "function") {
+                let idle = value.idleCheck();
+                
+                if (!idle){
+                    console.log(`${client.mainConfig.botName} is busy, terminate fail.`);
+                    return;
+                }
+            }
+        }
+    }
+
+    // emit all client
     for (let client of clients) {
         client.emit('close');
     }
-    // server.terminate();
+    // terminate http server
+    server.terminate();
 
     if (process.env.HOST_TYPE == 'HEROKU') { await rebootByHerokuAPI(); }
 

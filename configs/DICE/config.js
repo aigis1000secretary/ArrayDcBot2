@@ -18,8 +18,6 @@ module.exports = {
         // 'memberChecker3',
     ],
 
-    debugChannelID: '1024627739023650827',
-
     herokuToken: process.env.HEROKU_TOKEN,
 
     youtube: {

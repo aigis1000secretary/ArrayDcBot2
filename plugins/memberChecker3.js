@@ -1586,6 +1586,13 @@ module.exports = {
             // offline msg
             mainMcCore.destroy();
         });
+    },
+
+    idleCheck() {
+        for (let [holoChannelID, core] of mainMcCore.ytChannelCores) {
+            if (core.cacheStreamID != null) { return false };
+        }
+        return true;
     }
 }
 
