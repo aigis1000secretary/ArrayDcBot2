@@ -28,7 +28,7 @@ module.exports = {      // KTG
             memberChannelID: '1010005672152281218',      // #⚫_member
         },
         {
-            holoChannelID: 'UCZlDXzGoo7d44bwdNObFacg',   // kanata
+            holoChannelID: 'UCFKOVgVbGmX65RxO3EtH3iw',   // lamy
             // apiKey: [process.env.YOUTUBE_APIKEY_0, process.env.YOUTUBE_APIKEY_7],   // SSRB
             // apiKey: [process.env.YOUTUBE_APIKEY_8, process.env.YOUTUBE_APIKEY_9],   // KZMI
             apiKey: [process.env.YOUTUBE_APIKEY_A, process.env.YOUTUBE_APIKEY_B],   // TEST
@@ -47,10 +47,13 @@ module.exports = {      // KTG
         //     holoChannelID: 'UCFTLzh12_nrtzqBPsTCqenA',   // aki
         //     holoChannelID: 'UCs9_O1tRPMQTHQ-N_L6FU2g',   // rui
         //     holoChannelID: 'UC1uv2Oq6kNxgATlCiez59hw',   // towa
+        //     holoChannelID: 'UCFKOVgVbGmX65RxO3EtH3iw',   // lamy
+        //     holoChannelID: 'UCZlDXzGoo7d44bwdNObFacg',   // kanata
         // }
     ],
 
     // messageLogger: { LOG_CHANNEL_ID: '1009645372831977482' },      // #_bot-test
 
     ping: {},
+    delall: {},
 }

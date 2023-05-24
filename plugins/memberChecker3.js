@@ -1253,6 +1253,13 @@ class MainMemberCheckerCore {
         this.client = client;
         this.guild = await client.guilds.fetch('713622845682614302');
 
+
+        const livechatFiles = fs.readdirSync('.').filter(file => file.includes('.live_chat.'));
+        for (const file of livechatFiles) {
+            fs.unlinkSync(file);
+        }
+
+
         this.initialization = 2;
     }
 
@@ -1571,7 +1578,7 @@ module.exports = {
                 await mainMcCore.addGuild(config, { client, gID });
             }
         }
-        // test code
+        // // test code
         // await sleep(1000)
         // mainMcCore.ytChannelCores.get(`UCUKD-uaobj9jiqB-VXt71mA`).traceStreamChatByYtdlp({ vID: 'Vx1K89idggs' });
 
