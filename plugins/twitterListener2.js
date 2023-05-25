@@ -398,52 +398,10 @@ module.exports = {
             this.twitter.stream.destroy();
         });
 
-        client.on("messageReactionAdd", async (reaction, user) => {
-            if (reaction.message.partial) await reaction.message.fetch().catch(() => { });
-            if (reaction.partial) await reaction.fetch().catch(() => { });
-
-            // skip other emoji
-            if (reaction.emoji.toString() != EMOJI_RECYCLE) { return; }
-            // skip bot reaction
-            if (user.bot) { return; }
-
-            // get msg data
-            const { message } = reaction;
-
-            // check deletable
-            if (message.author?.id != client.user.id) { return; }
-            if (!message.deletable) { return; }
-
-            // check message
-            // get config
-            const configs = client.config[message.guild.id];
-            if (!configs?.twitterListener2) { return false; }
-
-            // skip not target channel
-            const config = configs.twitterListener2.find((cfg) => { return message.channel.id == cfg.RETWEET_CHANNEL_ID });
-            if (!config) { return; }
-
-            // delete bot message not retweet message
-            if (!message.content.startsWith(`https://twitter.com/`)) { return; }
-
-            if (reaction.count <= (config.RETWEET_DELCOUNT || 5)) { return; }
-
-            // // dont need to check this?
-            // // // skip msg which didnt react recycle reaction(not this command's reply)
-            // // if (!reaction.me) { return console.log(`[twitterBot] reaction.me = ${reaction.me}`); }   // reaction.me only work once?
-            // let reactionMe = reaction.users.cache.has(guild.members.me.id);
-            // if (!reactionMe) {
-            //     await reaction.users.fetch().catch(() => { });   // re-check cache
-            //     reactionMe = reaction.users.cache.has(guild.members.me.id);
-            // }
-            // if (!reactionMe) { return; }
-
-            setTimeout(() => message.delete().catch(() => { }), 250);
-        });
     },
 
     async messageReactionAdd(reaction, user, pluginConfig) {
-
+        // skip bot reaction
         if (user.bot) { return false; }
 
         const { message } = reaction;

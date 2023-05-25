@@ -1,5 +1,5 @@
 
-const [EMOJI_HAMMER_AND_WRENCH, EMOJI_BIRD, EMOJI_ALARM_CLOCK] = ['🛠️', '🐦', '⏰']
+const [EMOJI_HAMMER_AND_WRENCH, EMOJI_BIRD, EMOJI_ALARM_CLOCK, EMOJI_BUILDING_CONSTRUCTION] = ['🛠️', '🐦', '⏰', '🏗️']
 const EMOJI_REBOOTED = (process.env.HOST_TYPE == 'FLY_IO' ? EMOJI_BIRD : EMOJI_ALARM_CLOCK);
 
 const DEBUG_CHANNEL_ID = '826992877925171250';
@@ -250,7 +250,7 @@ module.exports = {
                 const rebooted =
                     ([1, 9, 17].includes(nowHours) && nowMinutes >= 55) ||  // in reboot time
                     ([2, 10, 18].includes(nowHours) && nowMinutes < 5);     // really reboot time
-                const type = rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH;
+                const type = process.env.HOST_TYPE == 'debug' ? EMOJI_BUILDING_CONSTRUCTION : (rebooted ? EMOJI_REBOOTED : EMOJI_HAMMER_AND_WRENCH);
                 const nowDate = parseInt(Date.now() / 1000);
                 await channel.send({ content: `<t:${nowDate}>  <t:${nowDate}:R> 📳! ${type}` }).catch(() => { });
             }

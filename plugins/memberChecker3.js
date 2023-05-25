@@ -614,7 +614,7 @@ class McChannelCore {
             let nextTime = data.pollingIntervalMillis;
             let length = data.items.length;
             if (length == 0) { nextTime *= 3; }
-            mclog(` -- ${length.toString().padStart(3, ' ')} messages returned -- ${nextTime} ${pageToken}`)
+            mclog(`[MC3] -- ${length.toString().padStart(3, ' ')} messages returned -- ${nextTime} ${pageToken}`)
 
             this.interval = setTimeout(arg => this.traceStreamChat(arg), nextTime, { vID, liveChatId, pageToken, loop });
             return;
@@ -979,14 +979,14 @@ class McGuildCore {
 
     // check user role / membership expires
     async checkExpiresUser() {
-        mclog('core.checkExpiresUser');
+        mclog('[MC3] core.checkExpiresUser');
         let pgData = [];
 
         // get discord users cache
         await this.guild.members.fetch({ force: true }).catch(console.log);
 
         pgData = (await Pg.listUserData())?.rows || [];
-        mclog(`Pg.listUserData`);
+        mclog(`[MC3] Pg.listUserData`);
         for (let pgUser of pgData) {
             // pgUser = { discord_id: '244255110572670987', youtube_id: 'UCgUpDIQ7Cq4kJETqZhGk7Kg', ssrb_expires: '0', kzmi_expires: '0' }
 
@@ -997,7 +997,7 @@ class McGuildCore {
             // get user data in guild
             let dcUser = this.guild.members.cache.get(dID);
             if (!dcUser) {
-                // mclog(`User <@${dID}> not in guild <${this.guild}>`);
+                // mclog(`[MC3] User <@${dID}> not in guild <${this.guild}>`);
                 continue;
             }
 
@@ -1009,18 +1009,18 @@ class McGuildCore {
                 Pg.updateExpires(dID, this.expiresKey, 0);
 
                 if (isSpecalUser) {
-                    mclog(`User <@${dID}> expired, Remove role!`);
+                    mclog(`[MC3] User <@${dID}> expired, Remove role!`);
                     this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Red).setDescription(`認證過期, 刪除身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
                     dcUser.roles.remove(this.memberRole).catch(console.log);
                 }
-                // else { mclog(`User <@${dcUser.user.tag}> in guild without role <${this.memberRole.name}>.`); }
+                // else { mclog(`[MC3] User <@${dcUser.user.tag}> in guild without role <${this.memberRole.name}>.`); }
             } else {
                 if (!isSpecalUser) {
-                    mclog(`User <@${dID}> without role, Add role!`);
+                    mclog(`[MC3] User <@${dID}> without role, Add role!`);
                     this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Blue).setDescription(`確認期限, 恢復身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
                     dcUser.roles.add(this.memberRole).catch(console.log);
                 }
-                // else { mclog(`User <@${dcUser.user.tag}> in guild with role <${this.memberRole.name}>.`); }
+                // else { mclog(`[MC3] User <@${dcUser.user.tag}> in guild with role <${this.memberRole.name}>.`); }
             }
         }
     }
@@ -1044,14 +1044,14 @@ class McGuildCore {
 
         let pgUser = ((result)?.rows || [null])[0];
         if (!pgUser) {
-            // mclog(`User not in database: ${auDetails.displayName}`);
+            // mclog(`[MC3] User not in database: ${auDetails.displayName}`);
             return;
         }
 
         let dID = pgUser.discord_id;
         let dcUser = this.guild.members.cache.get(dID);
         if (!dcUser) {
-            // mclog(`User <@${dID}> not in guild <${this.guild}>`);
+            // mclog(`[MC3] User <@${dID}> not in guild <${this.guild}>`);
             return;
         }
 
@@ -1076,11 +1076,11 @@ class McGuildCore {
             await Pg.updateExpires(dID, this.expiresKey);
 
             if (isSpecalUser) {
-                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Update Expires <${this.expiresKey}>!`);
+                mclog(`[MC3] User <${auDetails.displayName}> in guild <${this.guild}>, Update Expires <${this.expiresKey}>!`);
                 await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Aqua).setDescription(`認證成功, 延展期限: ${dcUser.user.tag} ${dcUser.toString()}`));
             }
             if (!isSpecalUser) {
-                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Add Role!`);
+                mclog(`[MC3] User <${auDetails.displayName}> in guild <${this.guild}>, Add Role!`);
                 await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Blue).setDescription(`認證成功, 新增身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
                 dcUser.roles.add(this.memberRole).catch(console.error);
             }
@@ -1089,12 +1089,12 @@ class McGuildCore {
             if (pgUser[this.expiresKey] != 0) { Pg.updateExpires(dID, this.expiresKey, 0); }
 
             if (isSpecalUser) {
-                mclog(`User <${auDetails.displayName}> in guild <${this.guild}>, Remove role!`);
+                mclog(`[MC3] User <${auDetails.displayName}> in guild <${this.guild}>, Remove role!`);
                 await this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Red).setDescription(`非會員, 刪除身分組(${this.memberRole}): ${dcUser.user.tag} ${dcUser.toString()}`));
                 dcUser.roles.remove(this.memberRole).catch(console.log);
             }
             // if (!isSpecalUser) {
-            //     mclog(`User <${auDetails.displayName}> in guild <${this.guild}>.`);
+            //     mclog(`[MC3] User <${auDetails.displayName}> in guild <${this.guild}>.`);
             //     this.dcPushEmbed(new EmbedBuilder().setColor(Colors.Orange).setDescription(`${pgUser[this.expiresKey] > 0 ? '申請無效, 清除申請' : '申請無效'}: ${dcUser.user.tag} ${dcUser.toString()}`));
             // }
         }
@@ -1137,7 +1137,7 @@ class McGuildCore {
 
             // check stream start time
             let status = video.snippet.liveBroadcastContent;
-            mclog(`${status.padStart(12, ' ')} <${video.snippet.title}>`);
+            mclog(`[MC3] ${status.padStart(12, ' ')} <${video.snippet.title}>`);
 
             // get video data
             let description = video ? video.snippet.title : vID;
@@ -1173,7 +1173,7 @@ class McGuildCore {
             // check channel permissions
             let permissions = channel.permissionsFor(channel.guild.members.me);
             if (!permissions.has(PermissionFlagsBits.ManageChannels)) {
-                mclog('Missing Permissions: MANAGE_CHANNELS');
+                mclog('[MC3] Missing Permissions: MANAGE_CHANNELS');
                 continue;
             }
 
@@ -1231,7 +1231,7 @@ class MainMemberCheckerCore {
     interval = null;
     guild = null;
 
-    constructor() { };
+    constructor() { this.init(); };
     initialization = 0;
 
     async init(client) {
@@ -1250,15 +1250,16 @@ class MainMemberCheckerCore {
         await Pg.init();
 
         this.interval = setTimeout(this.timeoutMethod, 2000);
-        this.client = client;
-        this.guild = await client.guilds.fetch('713622845682614302');
-
 
         const livechatFiles = fs.readdirSync('.').filter(file => file.includes('.live_chat.'));
         for (const file of livechatFiles) {
             fs.unlinkSync(file);
         }
 
+        if (client && client.user.id != `713624995372466179`) {
+            this.client = client;
+            this.guild = await client.guilds.fetch('713622845682614302');
+        }
 
         this.initialization = 2;
     }
