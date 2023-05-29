@@ -5,7 +5,29 @@ const server = require('./server.js');
 const fs = require('fs');
 const sleep = (ms) => { return new Promise((resolve) => { setTimeout(resolve, ms); }); };
 
+const rebootByHerokuAPI = async () => {
+    if (!fs.existsSync("./.env")) {
+        // heroku API
+        const apiUrl = 'https://api.heroku.com';
+        const app_id_or_name = 'arraydcbot';
+        const dyno_id_or_name = 'web.1';
+        // util promisify
+        // const requestGet = require('util').promisify(require('request').get);
+        const requestDelete = require('util').promisify(require('request').delete);
 
+        // restart by heroku API
+        await requestDelete({
+            url: `${apiUrl}/apps/${app_id_or_name}/dynos/${dyno_id_or_name}`,
+            headers: {
+                Accept: 'application/vnd.heroku+json; version=3',
+                Authorization: `Bearer ${process.env.HEROKU_TOKEN}`
+            },
+            json: true
+        });
+
+        await sleep(5000);
+    }
+};
 
 let clients = [];
 module.exports.terminate = async () => {
@@ -16,8 +38,8 @@ module.exports.terminate = async () => {
             // idleCheck method
             if (!!value.idleCheck && typeof (value.idleCheck) == "function") {
                 let idle = value.idleCheck();
-                
-                if (!idle){
+
+                if (!idle) {
                     console.log(`${client.mainConfig.botName} is busy, terminate fail.`);
                     return;
                 }
@@ -49,6 +71,8 @@ module.exports.terminate = async () => {
 
     for (const bot of [
         'SSRB',
+        'POKOBE',
+        'DLSITE',
         // 'DICE'
     ]) {
         const configPath = `./configs/${bot}/`;

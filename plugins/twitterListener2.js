@@ -420,7 +420,7 @@ module.exports = {
 
         // skip not target channel
         const config = pluginConfig.find((cfg) => { return message.channel.id == cfg.RETWEET_CHANNEL_ID });
-        if (!config || reaction.count <= (config.RETWEET_DELCOUNT || 5)) { return; }
+        if (!config || reaction.count <= (config.RETWEET_DELCOUNT || 1)) { return; }
 
         setTimeout(() => message.delete().catch(() => { }), 250);
     },
