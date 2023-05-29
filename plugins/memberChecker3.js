@@ -1554,6 +1554,12 @@ module.exports = {
 
                 continue;
             }
+
+            if (command == 'test' && message.author?.id == '353625493876113440') {
+                let ytCore = mainMcCore.ytChannelCores.get('UCUKD-uaobj9jiqB-VXt71mA');
+                ytCore?.traceStreamChatByYtdlp({ vID: args[0] || 'Vx1K89idggs' });
+                return;
+            }
         }
     },
 
