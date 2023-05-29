@@ -9,7 +9,6 @@ let mclog = debug ? console.log : () => { };
 const sleep = (ms) => { return new Promise(resolve => setTimeout(resolve, ms)); };
 const md5 = (source) => require('crypto').createHash('md5').update(source).digest('hex');
 
-
 // discord
 const { EmbedBuilder, PermissionFlagsBits, Colors } = require('discord.js');
 
@@ -37,8 +36,6 @@ const pool = new Pool(pgConfig);
 pool.connect().then(p => { p.end(); }).catch(console.error); // test connect
 const memberTime = 1000 * 60 * 60 * 24 * 35;    // 1000 ms  *  60 sec  *  60 min  *  24 hr  *  35 days
 // const memberTemp = 1000 * 60 * 60 * 24;         // 1000 ms  *  60 sec  *  60 min  *  24 hr
-
-const coreArray = [];
 
 class Pg {
     static dataCache = new Map();
@@ -1247,6 +1244,20 @@ class MainMemberCheckerCore {
         // await YoutubeDlWrap.downloadFromGithub('youtube-dl', '2023.03.04.1', '');
         await YTDlpWrap.downloadFromGithub(`yt-dlp.exe`).catch(() => { });
 
+        // cookie.txt
+        if (fs.existsSync('./cookies.txt')) {
+            const key = process.env.JSONKEY;
+            let rawData = fs.readFileSync('./cookies.txt', 'utf8');
+            let encData = crypto.encrypt(rawData, key);
+            fs.writeFileSync('./cookies.enc', encData);
+
+        } else if (fs.existsSync('./cookies.enc')) {
+            const key = process.env.JSONKEY;
+            let encData = fs.readFileSync('./cookies.enc', 'utf8');
+            let rawData = crypto.decrypt(encData, key);
+            fs.writeFileSync('./cookies.txt', rawData);
+        }
+
         await Pg.init();
 
         this.interval = setTimeout(this.timeoutMethod, 2000);
@@ -1450,6 +1461,32 @@ class MainMemberCheckerCore {
 }
 let mainMcCore = new MainMemberCheckerCore();
 
+
+class crypto {
+    // const ENCRYPTION_KEY = 'Put_Your_Password_Here'.padEnd(32, "_");
+    // const ENCRYPTION_KEY = Buffer.from('FoCKvdLslUuB4y3EZlKate7XGottHski1LmyqJHvUhs=', 'base64')
+    // const ENCRYPTION_KEY = process.env.JSONKEY;
+
+    static decrypt(text, key) {
+        if (!text) return null;
+        let textParts = text.split(':');
+        let iv = Buffer.from(textParts.shift(), 'hex');
+        let encryptedText = Buffer.from(textParts.join(':'), 'hex');
+        let decipher = require('crypto').createDecipheriv('aes-256-ctr', Buffer.from(key), iv);
+        let decrypted = decipher.update(encryptedText);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        return decrypted.toString();
+    }
+
+    static encrypt(text, key) {
+        if (!text) return null;
+        let iv = require('crypto').randomBytes(16);
+        let cipher = require('crypto').createCipheriv('aes-256-ctr', Buffer.from(key), iv);
+        let encrypted = cipher.update(text);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        return iv.toString('hex') + ':' + encrypted.toString('hex');
+    }
+}
 
 
 
