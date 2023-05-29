@@ -11,6 +11,7 @@ module.exports = {
         'uptimer',
         'delall',
         'memberChecker3',
+        'twitterAntiFilter',
     ],
 
     herokuToken: process.env.HEROKU_TOKEN,

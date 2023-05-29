@@ -48,8 +48,8 @@ module.exports.terminate = async () => {
     server.init();
 
     for (const bot of [
-        // 'SSRB',
-        'DICE'
+        'SSRB',
+        // 'DICE'
     ]) {
         const configPath = `./configs/${bot}/`;
 

@@ -56,4 +56,5 @@ module.exports = {      // KTG
 
     ping: {},
     delall: {},
+    twitterAntiFilter: {},
 }
